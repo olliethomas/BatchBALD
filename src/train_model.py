@@ -3,10 +3,10 @@ from torch import optim as optim
 from torch.nn import functional as F
 from torch import nn
 
-import ignite_restoring_score_guard
-from ignite_progress_bar import ignite_progress_bar
-from ignite_utils import epoch_chain, chain, log_epoch_results, store_epoch_results, store_iteration_results
-from sampler_model import SamplerModel, NoDropoutModel
+import src.ignite_restoring_score_guard
+from .ignite_progress_bar import ignite_progress_bar
+from .ignite_utils import epoch_chain, chain, log_epoch_results, store_epoch_results, store_iteration_results
+from .sampler_model import SamplerModel, NoDropoutModel
 from typing import NamedTuple
 
 
@@ -57,7 +57,7 @@ def train_model(
     if lr_scheduler is not None:
         print(f"LRs: {[group['lr'] for group in optimizer.param_groups]}")
 
-    restoring_score_guard = ignite_restoring_score_guard.RestoringScoreGuard(
+    restoring_score_guard = src.ignite_restoring_score_guard.RestoringScoreGuard(
         patience=early_stopping_patience,
         score_function=lambda engine: engine.state.metrics["accuracy"],
         out_of_patience_callback=out_of_patience,

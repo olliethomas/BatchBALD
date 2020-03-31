@@ -11,11 +11,11 @@ from blackhc import laaos
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
 
-import torch_utils
-from dataset_enum import DatasetEnum, get_experiment_data, get_targets
-from train_model import train_model
-from random_fixed_length_sampler import RandomFixedLengthSampler
-from active_learning_data import ActiveLearningData
+import src.torch_utils
+from .dataset_enum import DatasetEnum, get_experiment_data, get_targets
+from .train_model import train_model
+from .random_fixed_length_sampler import RandomFixedLengthSampler
+from .active_learning_data import ActiveLearningData
 
 import prettyprinter as pp
 import logging
@@ -132,7 +132,7 @@ def main():
         experiment_data.active_learning_data.acquire(
             list(
                 itertools.chain.from_iterable(
-                    torch_utils.get_balanced_sample_indices(
+                    src.torch_utils.get_balanced_sample_indices(
                         get_targets(experiment_data.available_dataset), dataset.num_classes, num_samples_per_class
                     ).values()
                 )

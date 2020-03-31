@@ -2,9 +2,9 @@ import torch.nn as nn
 import torch
 import numpy as np
 
-from acquisition_batch import AcquisitionBatch
-from reduced_consistent_mc_sampler import reduced_eval_consistent_bayesian_model
-from acquisition_functions import AcquisitionFunction
+from .acquisition_batch import AcquisitionBatch
+from .reduced_consistent_mc_sampler import reduced_eval_consistent_bayesian_model
+from .acquisition_functions import AcquisitionFunction
 
 
 def get_top_n(scores: np.ndarray, n):

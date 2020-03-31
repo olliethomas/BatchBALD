@@ -9,3 +9,7 @@ torchvision==0.3.0
 typing==3.6.6
 dataclasses==0.6
 pytest-benchmark
+black
+mypy
+data-science-types
+prettyprinter

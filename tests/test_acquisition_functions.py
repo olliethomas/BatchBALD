@@ -2,15 +2,15 @@ import pytest
 
 import torch
 
-import sampler_model
+import src.sampler_model
 import torch.utils.data
 
 from torchvision import datasets, transforms
 
 import itertools
 
-import acquisition_functions
-import mnist_model
+import src.acquisition_functions
+import src.mnist_model
 
 
 # NOTE: we could replace this with a custom dataset if it becomes a problem on Jekyll.
@@ -29,7 +29,7 @@ def test_random_acquistion_function():
         shuffle=False,
     )
 
-    estimator = acquisition_functions.RandomAcquisitionFunction()
+    estimator = src.acquisition_functions.RandomAcquisitionFunction()
     estimator.eval()
 
     scores = torch.tensor([])
@@ -42,8 +42,8 @@ def test_random_acquistion_function():
     assert scores.shape == (batch_size * num_iters,)
 
 
-@pytest.mark.parametrize("acquisition_function", acquisition_functions.AcquisitionFunction)
-def test_acquisition_functions(acquisition_function: acquisition_functions.AcquisitionFunction):
+@pytest.mark.parametrize("acquisition_function", src.acquisition_functions.AcquisitionFunction)
+def test_acquisition_functions(acquisition_function: src.acquisition_functions.AcquisitionFunction):
     batch_size = 13
 
     test_loader = torch.utils.data.DataLoader(
@@ -56,7 +56,7 @@ def test_acquisition_functions(acquisition_function: acquisition_functions.Acqui
         shuffle=False,
     )
 
-    bayesian_net = mnist_model.BayesianNet()
+    bayesian_net = src.mnist_model.BayesianNet(10)
 
     estimator = acquisition_function.create(bayesian_net, k=1)
     estimator.eval()
@@ -71,9 +71,9 @@ def test_acquisition_functions(acquisition_function: acquisition_functions.Acqui
     assert scores.shape == (batch_size * num_iters,)
 
 
-@pytest.mark.parametrize("af_type", acquisition_functions.AcquisitionFunction)
-def test_check_input_permutation(af_type: acquisition_functions.AcquisitionFunction):
-    if af_type == acquisition_functions.AcquisitionFunction.random:
+@pytest.mark.parametrize("af_type", src.acquisition_functions.AcquisitionFunction)
+def test_check_input_permutation(af_type: src.acquisition_functions.AcquisitionFunction):
+    if af_type == src.acquisition_functions.AcquisitionFunction.random:
         return
 
     batch_size = 12

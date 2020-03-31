@@ -4,17 +4,17 @@ from blackhc.progress_bar import with_progress_bar
 from torch import nn as nn
 from torch.utils import data
 
-import active_learning_data
-import mc_dropout
+import src.active_learning_data
+import src.mc_dropout
 import torch
 
-import torch_utils
-from acquisition_functions import AcquisitionFunction
+import src.torch_utils
+from .acquisition_functions import AcquisitionFunction
 
 
 @dataclass
 class SubsetEvalResults:
-    subset_split: active_learning_data.ActiveLearningData
+    subset_split: src.active_learning_data.ActiveLearningData
     subset_dataloader: data.DataLoader
     scores_B: torch.Tensor
     logits_B_K_C: torch.Tensor
@@ -24,7 +24,7 @@ reduced_eval_consistent_bayesian_model_cuda_chunk_size = 512
 
 
 def reduced_eval_consistent_bayesian_model(
-    bayesian_model: mc_dropout.BayesianModule,
+    bayesian_model: src.mc_dropout.BayesianModule,
     acquisition_function: AcquisitionFunction,
     num_classes: int,
     k: int,
@@ -45,7 +45,7 @@ def reduced_eval_consistent_bayesian_model(
     # Here, we need to use available_dataset because it allows us to easily recover the original indices.
 
     # We start with all data in the acquired data.
-    subset_split = active_learning_data.ActiveLearningData(available_loader.dataset)
+    subset_split = src.active_learning_data.ActiveLearningData(available_loader.dataset)
     initial_length = len(available_loader.dataset)
 
     initial_split_length = initial_length * initial_percentage // 100
@@ -70,7 +70,7 @@ def reduced_eval_consistent_bayesian_model(
         logits_B_K_C = None
 
         k_lower = 0
-        torch_utils.gc_cuda()
+        src.torch_utils.gc_cuda()
         chunk_size = reduced_eval_consistent_bayesian_model_cuda_chunk_size if device.type == "cuda" else 32
         while k_lower < k:
             try:
@@ -100,14 +100,14 @@ def reduced_eval_consistent_bayesian_model(
                     logits_B_K_C[lower:upper, k_lower:k_upper].copy_(mc_output_B_K_C.double(), non_blocking=True)
 
             except RuntimeError as exception:
-                if torch_utils.should_reduce_batch_size(exception):
+                if src.torch_utils.should_reduce_batch_size(exception):
                     if chunk_size <= 1:
                         raise
                     chunk_size = chunk_size // 2
                     print(f"New reduced_eval_consistent_bayesian_model_cuda_chunk_size={chunk_size} ({exception})")
                     reduced_eval_consistent_bayesian_model_cuda_chunk_size = chunk_size
 
-                    torch_utils.gc_cuda()
+                    src.torch_utils.gc_cuda()
                 else:
                     raise
             else:
@@ -120,6 +120,7 @@ def reduced_eval_consistent_bayesian_model(
 
                 # Compute the score if it's needed: we are going to reduce the dataset or we're in the last iteration.
                 if next_size < B or k_upper == k:
+                    # Calculate the scores (mutual information) of logits_B_K_C
                     scores_B = acquisition_function.compute_scores(
                         logits_B_K_C, available_loader=subset_dataloader, device=device
                     )
@@ -128,8 +129,9 @@ def reduced_eval_consistent_bayesian_model(
 
                 if next_size < B:
                     print("Reducing size", next_size)
+                    # Get indices of samples sorted by increasing mutual information
                     sorted_indices = torch.argsort(scores_B, descending=True)
-
+                    # Select next_size samples with smallest mutual information (ascending indices)
                     new_indices = torch.sort(sorted_indices[:next_size], descending=False)[0]
 
                     B = next_size

@@ -11,13 +11,14 @@ import torch
 
 from typing import List
 
-import mnist_model
-import emnist_model
-from active_learning_data import ActiveLearningData
-from torch_utils import get_balanced_sample_indices
-from train_model import train_model
-from transformed_dataset import TransformedDataset
-import subrange_dataset
+import src.mnist_model
+import src.emnist_model
+import src.vgg_model
+from .active_learning_data import ActiveLearningData
+from .torch_utils import get_balanced_sample_indices
+from .train_model import train_model
+from .transformed_dataset import TransformedDataset
+import src.subrange_dataset
 
 
 @dataclass
@@ -38,6 +39,30 @@ class DataSource:
     shared_transform: object = None
     train_transform: object = None
     scoring_transform: object = None
+
+
+def get_CINIC10(root="./"):
+    cinic_directory = root + "data/CINIC-10"
+    cinic_mean = [0.47889522, 0.47227842, 0.43047404]
+    cinic_std = [0.24205776, 0.23828046, 0.25874835]
+
+    train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip()])
+    shared_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=cinic_mean, std=cinic_std)])
+
+    train_dataset = datasets.ImageFolder(cinic_directory + "/train")
+    validation_dataset = datasets.ImageFolder(cinic_directory + "/valid")
+
+    # Concatenate train and validation set to have more samples.
+    merged_train_dataset = torch.utils.data.ConcatDataset([train_dataset, validation_dataset])
+
+    test_dataset = datasets.ImageFolder(cinic_directory + "/test")
+
+    return DataSource(
+        train_dataset=merged_train_dataset,
+        test_dataset=test_dataset,
+        shared_transform=shared_transform,
+        train_transform=train_transform,
+    )
 
 
 def get_MNIST():
@@ -64,14 +89,27 @@ class DatasetEnum(enum.Enum):
     emnist = "emnist"
     emnist_bymerge = "emnist_bymerge"
     repeated_mnist_w_noise = "repeated_mnist_w_noise"
+    repeated_mnist_w_noise2 = "repeated_mnist_w_noise2"
+    repeated_mnist_w_noise5 = "repeated_mnist_w_noise5"
     mnist_w_noise = "mnist_w_noise"
+    cinic10 = "cinic10"
 
     def get_data_source(self):
         if self == DatasetEnum.mnist:
             return get_MNIST()
-        elif self in (DatasetEnum.repeated_mnist_w_noise, DatasetEnum.mnist_w_noise):
+        elif self in (
+            DatasetEnum.repeated_mnist_w_noise2,
+            DatasetEnum.repeated_mnist_w_noise5,
+            DatasetEnum.repeated_mnist_w_noise,
+            DatasetEnum.mnist_w_noise,
+        ):
             # num_classes=10, input_size=28
-            num_repetitions = 3 if self == DatasetEnum.repeated_mnist_w_noise else 1
+            num_repetitions = {
+                DatasetEnum.mnist_w_noise: 1,
+                DatasetEnum.repeated_mnist_w_noise: 3,
+                DatasetEnum.repeated_mnist_w_noise2: 2,
+                DatasetEnum.repeated_mnist_w_noise5: 5,
+            }[self]
 
             transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
             org_train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
@@ -112,35 +150,58 @@ class DatasetEnum(enum.Enum):
             if self == DatasetEnum.emnist:
                 # Balanced contains a test set
                 split_index = len(train_dataset) - len(test_dataset)
-                train_dataset, validation_dataset = subrange_dataset.dataset_subset_split(train_dataset, split_index)
+                train_dataset, validation_dataset = src.subrange_dataset.dataset_subset_split(
+                    train_dataset, split_index
+                )
             else:
                 validation_dataset = None
             return DataSource(
                 train_dataset=train_dataset, test_dataset=test_dataset, validation_dataset=validation_dataset
             )
+        elif self == DatasetEnum.cinic10:
+            return get_CINIC10()
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     @property
     def num_classes(self):
-        if self in (DatasetEnum.mnist, DatasetEnum.repeated_mnist_w_noise, DatasetEnum.mnist_w_noise):
+        if self in (
+            DatasetEnum.mnist,
+            DatasetEnum.repeated_mnist_w_noise,
+            DatasetEnum.repeated_mnist_w_noise2,
+            DatasetEnum.repeated_mnist_w_noise5,
+            DatasetEnum.mnist_w_noise,
+        ):
             return 10
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
             return 47
+        elif self == DatasetEnum.cinic10:
+            return 10
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     def create_bayesian_model(self, device):
         num_classes = self.num_classes
-        if self in (DatasetEnum.mnist, DatasetEnum.repeated_mnist_w_noise, DatasetEnum.mnist_w_noise):
-            return mnist_model.BayesianNet(num_classes=num_classes).to(device)
+        if self in (
+            DatasetEnum.mnist,
+            DatasetEnum.repeated_mnist_w_noise,
+            DatasetEnum.repeated_mnist_w_noise2,
+            DatasetEnum.repeated_mnist_w_noise5,
+            DatasetEnum.mnist_w_noise,
+        ):
+            return src.mnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
-            return emnist_model.BayesianNet(num_classes=num_classes).to(device)
+            return src.emnist_model.BayesianNet(num_classes=num_classes).to(device)
+        elif self == DatasetEnum.cinic10:
+            return src.vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     def create_optimizer(self, model):
-        optimizer = optim.Adam(model.parameters())
+        if self == DatasetEnum.cinic10:
+            optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        else:
+            optimizer = optim.Adam(model.parameters())
         return optimizer
 
     def create_train_model_extra_args(self, optimizer):
@@ -236,7 +297,7 @@ def get_experiment_data(
                 print("Using a balanced validation set")
                 validation_dataset = data.Subset(
                     validation_dataset,
-                    balance_dataset_by_repeating(validation_dataset, num_classes, validation_set_size),
+                    balance_dataset_by_repeating(validation_dataset, num_classes, validation_set_size, upsample=False),
                 )
 
     if balanced_test_set:
@@ -252,9 +313,11 @@ def get_experiment_data(
     if reduced_dataset:
         # Let's assume we won't use more than 1000 elements for our validation set.
         active_learning_data.extract_dataset(len(train_dataset) - max(len(train_dataset) // 20, 5000))
-        test_dataset = subrange_dataset.SubrangeDataset(test_dataset, 0, max(len(test_dataset) // 10, 5000))
+        test_dataset = src.subrange_dataset.SubrangeDataset(test_dataset, 0, max(len(test_dataset) // 10, 5000))
         if validation_dataset:
-            validation_dataset = subrange_dataset.SubrangeDataset(validation_dataset, 0, len(validation_dataset) // 10)
+            validation_dataset = src.subrange_dataset.SubrangeDataset(
+                validation_dataset, 0, len(validation_dataset) // 10
+            )
         print("USING REDUCED DATASET!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
     show_class_frequencies = True
@@ -371,7 +434,9 @@ def get_targets(dataset):
     if isinstance(dataset, data.ConcatDataset):
         return torch.cat([get_targets(sub_dataset) for sub_dataset in dataset.datasets])
 
-    if isinstance(dataset, (datasets.MNIST,)):
-        return dataset.targets
+    if isinstance(dataset, (datasets.MNIST, datasets.ImageFolder,)):
+        return torch.as_tensor(dataset.targets)
+    if isinstance(dataset, datasets.SVHN):
+        return dataset.labels
 
     raise NotImplementedError(f"Unknown dataset {dataset}!")

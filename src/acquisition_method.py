@@ -2,10 +2,10 @@ import enum
 
 from torch import nn as nn
 
-import independent_batch_acquisition
-import multi_bald
-from acquisition_batch import AcquisitionBatch
-from acquisition_functions import AcquisitionFunction
+import src.independent_batch_acquisition
+import src.multi_bald
+from .acquisition_batch import AcquisitionBatch
+from .acquisition_functions import AcquisitionFunction
 
 
 class AcquisitionMethod(enum.Enum):
@@ -31,7 +31,7 @@ class AcquisitionMethod(enum.Enum):
         )
 
         if self == self.independent:
-            return independent_batch_acquisition.compute_acquisition_bag(
+            return src.independent_batch_acquisition.compute_acquisition_bag(
                 bayesian_model=bayesian_model,
                 acquisition_function=acquisition_function,
                 num_classes=num_classes,
@@ -42,8 +42,8 @@ class AcquisitionMethod(enum.Enum):
                 available_loader=available_loader,
                 device=device,
             )
-        elif self == self.multibald:
-            return multi_bald.compute_multi_bald_batch(
+        elif self == self.multibald:  # This seems to be the default used in experiment
+            return src.multi_bald.compute_multi_bald_batch(
                 bayesian_model=bayesian_model,
                 available_loader=available_loader,
                 num_classes=num_classes,

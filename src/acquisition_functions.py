@@ -1,7 +1,7 @@
 import torch
 from blackhc.progress_bar import with_progress_bar
 
-import torch_utils
+import src.torch_utils
 
 import enum
 
@@ -15,20 +15,20 @@ def random_acquisition_function(logits_b_K_C):
 def variation_ratios(logits_b_K_C):
     # torch.max yields a tuple with (max, argmax).
     return torch.ones(logits_b_K_C.shape[0], dtype=logits_b_K_C.dtype, device=logits_b_K_C.device) - torch.exp(
-        torch.max(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)[0]
+        torch.max(src.torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)[0]
     )
 
 
 def mean_stddev_acquisition_function(logits_b_K_C):
-    return torch_utils.mean_stddev(logits_b_K_C)
+    return src.torch_utils.mean_stddev(logits_b_K_C)
 
 
 def max_entropy_acquisition_function(logits_b_K_C):
-    return torch_utils.entropy(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=-1)
+    return src.torch_utils.entropy(src.torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=-1)
 
 
 def bald_acquisition_function(logits_b_K_C):
-    return torch_utils.mutual_information(logits_b_K_C)
+    return src.torch_utils.mutual_information(logits_b_K_C)
 
 
 class AcquisitionFunction(enum.Enum):
@@ -45,7 +45,7 @@ class AcquisitionFunction(enum.Enum):
         elif self == AcquisitionFunction.predictive_entropy:
             return max_entropy_acquisition_function
         elif self == AcquisitionFunction.bald:
-            return bald_acquisition_function
+            return bald_acquisition_function  # This is used as default
         elif self == AcquisitionFunction.variation_ratios:
             return variation_ratios
         elif self == AcquisitionFunction.mean_stddev:
@@ -66,14 +66,14 @@ class AcquisitionFunction(enum.Enum):
             scores_B = torch.empty((B,), dtype=torch.float64)
 
             if device.type == "cuda":
-                torch_utils.gc_cuda()
+                src.torch_utils.gc_cuda()
                 KC_memory = K * C * 8
-                batch_size = min(torch_utils.get_cuda_available_memory() // KC_memory, 8192)
+                batch_size = min(src.torch_utils.get_cuda_available_memory() // KC_memory, 8192)
             else:
                 batch_size = 4096
 
             for scores_b, logits_b_K_C in with_progress_bar(
-                torch_utils.split_tensors(scores_B, logits_B_K_C, batch_size), unit_scale=batch_size
+                src.torch_utils.split_tensors(scores_B, logits_B_K_C, batch_size), unit_scale=batch_size
             ):
                 scores_b.copy_(scorer(logits_b_K_C.to(device)), non_blocking=True)
 

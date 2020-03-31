@@ -98,6 +98,8 @@ def entropy(logits, dim: int, keepdim: bool = False):
 
 @jit.script
 def mutual_information(logits_B_K_C):
+    """Returns the mutual information for each element of the batch,
+    determined by the K MC samples"""
     sample_entropies_B_K = entropy(logits_B_K_C, dim=-1)
     entropy_mean_B = torch.mean(sample_entropies_B_K, dim=1)
 
@@ -186,10 +188,7 @@ def batch_jsd(batch_p, q):
 @jit.script
 def batch_multi_choices(probs_b_C, M: int):
     """
-    probs_b_C: Ni... x C
-
-    Returns:
-        choices: Ni... x M
+    Returns sampled class labels accoding to the given prob. distribution
     """
     probs_B_C = probs_b_C.reshape((-1, probs_b_C.shape[-1]))
 
@@ -215,9 +214,12 @@ def gather_expand(data, dim, index):
     data = data.expand(new_data_shape)
     index = index.expand(new_index_shape)
 
+    # In the used case dim=-1 so torch.gather results in:
+    # out[i,j,k,l] = data[i,j,k,index[i,j,k,l]]
     return torch.gather(data, dim, index)
 
 
 def split_tensors(output, input, chunk_size):
+    """Returns output and input tensor splits as tuples"""
     assert len(output) == len(input)
     return list(zip(output.split(chunk_size), input.split(chunk_size)))

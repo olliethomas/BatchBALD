@@ -1,17 +1,17 @@
-import acquisition_functions
+import src.acquisition_functions
 
 # TODO(blackhc): extract AcquisitionMethod and DatasetEnum
-import acquisition_method
-import dataset_enum
+import src.acquisition_method
+import src.dataset_enum
 
 import torch
 from torch import nn
 
 import torch.utils.data as data
 
-from random_fixed_length_sampler import RandomFixedLengthSampler
-from train_model import train_model
-from active_learning_data import ActiveLearningData
+from .random_fixed_length_sampler import RandomFixedLengthSampler
+from .train_model import train_model
+from .active_learning_data import ActiveLearningData
 from collections import namedtuple
 from typing import NamedTuple
 
@@ -53,17 +53,19 @@ def parse_enum_str(enum_str: str, enum_cls):
 def recover_args(laaos_store) -> namedtuple:
     args = dict(laaos_store["args"])
     # Recover enums
-    args["type"] = parse_enum_str(args["type"], acquisition_functions.AcquisitionFunction)
+    args["type"] = parse_enum_str(args["type"], src.acquisition_functions.AcquisitionFunction)
 
     if "acquisition_method" in args:
-        args["acquisition_method"] = parse_enum_str(args["acquisition_method"], acquisition_method.AcquisitionMethod)
+        args["acquisition_method"] = parse_enum_str(
+            args["acquisition_method"], src.acquisition_method.AcquisitionMethod
+        )
     else:
-        args["acquisition_method"] = acquisition_method.AcquisitionMethod.independent
+        args["acquisition_method"] = src.acquisition_method.AcquisitionMethod.independent
 
     if "dataset" in args:
-        args["dataset"] = parse_enum_str(args["dataset"], dataset_enum.DatasetEnum)
+        args["dataset"] = parse_enum_str(args["dataset"], src.dataset_enum.DatasetEnum)
     else:
-        args["dataset"] = dataset_enum.DatasetEnum.mnist
+        args["dataset"] = src.dataset_enum.DatasetEnum.mnist
 
     return namedtuple("args", args.keys())(*args.values())
 
@@ -82,8 +84,8 @@ def recover_model(laaos_store, target_iteration=None):
 
     kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
 
-    dataset: dataset_enum.DatasetEnum = args.dataset
-    experiment_data = dataset_enum.get_experiment_data(
+    dataset: src.dataset_enum.DatasetEnum = args.dataset
+    experiment_data = src.dataset_enum.get_experiment_data(
         dataset.get_data_source(),
         dataset.num_classes,
         sample_indices,

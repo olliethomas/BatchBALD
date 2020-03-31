@@ -3,22 +3,22 @@ from torch.nn import functional as F
 
 # from torchvision import models
 
-import mc_dropout
+import src.mc_dropout
 
 
-class BayesianNet(mc_dropout.BayesianModule):
+class BayesianNet(src.mc_dropout.BayesianModule):
     def __init__(self, num_classes):
         super().__init__(num_classes)
 
         self.num_classes = num_classes
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
-        self.conv1_drop = mc_dropout.MCDropout2d()
+        self.conv1_drop = src.mc_dropout.MCDropout2d()
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
-        self.conv2_drop = mc_dropout.MCDropout2d()
+        self.conv2_drop = src.mc_dropout.MCDropout2d()
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3)
-        self.conv3_drop = mc_dropout.MCDropout2d()
+        self.conv3_drop = src.mc_dropout.MCDropout2d()
         self.fc1 = nn.Linear(128 * 4 * 4, 512)
-        self.fc1_drop = mc_dropout.MCDropout()
+        self.fc1_drop = src.mc_dropout.MCDropout()
         self.fc2 = nn.Linear(512, num_classes)
 
     def mc_forward_impl(self, input: Tensor):
