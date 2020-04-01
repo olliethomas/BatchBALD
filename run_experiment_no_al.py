@@ -3,25 +3,16 @@ import functools
 import itertools
 from typing import Any, Callable
 
-import torch
-
-import torch.utils.data as data
-
-from blackhc import laaos
-
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
+import torch
+import torch.utils.data as data
+from blackhc import laaos
 from torch.utils.data import Sampler
 
 import src.torch_utils
-from .dataset_enum import DatasetEnum, get_experiment_data, get_targets
-from .train_model import train_model
-from .random_fixed_length_sampler import RandomFixedLengthSampler
-from .active_learning_data import ActiveLearningData
-
-import prettyprinter as pp
-import logging
-import sys
+from src.dataset_enum import DatasetEnum, get_experiment_data, get_targets
+from src.random_fixed_length_sampler import RandomFixedLengthSampler
 
 
 def main() -> None:
@@ -35,7 +26,7 @@ def main() -> None:
     parser.add_argument("--test_batch_size", type=int, default=256, help="input batch size for testing")
     parser.add_argument("--validation_set_size", type=int, default=128, help="validation set size")
     parser.add_argument(
-        "--early_stopping_patience", type=int, default=1, help="# patience epochs for early stopping per iteration"
+        "--early_stopping_patience", type=int, default=1, help="# patience epochs for early stopping per iteration",
     )
     parser.add_argument("--epochs", type=int, default=30, help="number of epochs to train")
     parser.add_argument("--epoch_samples", type=int, default=5056, help="number of epochs to train")
@@ -50,7 +41,7 @@ def main() -> None:
     parser.add_argument("--num_inference_samples", type=int, default=5, help="number of samples for inference")
     parser.add_argument("--no_cuda", action="store_true", default=False, help="disables CUDA training")
     parser.add_argument(
-        "--name", type=str, default="results", help="name for the results file (name of the experiment)"
+        "--name", type=str, default="results", help="name for the results file (name of the experiment)",
     )
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument(
@@ -73,7 +64,7 @@ def main() -> None:
         help="force balances the test set---use with CAUTION!",
     )
     parser.add_argument(
-        "--log_interval", type=int, default=10, help="how many batches to wait before logging training status"
+        "--log_interval", type=int, default=10, help="how many batches to wait before logging training status",
     )
     parser.add_argument(
         "--dataset",

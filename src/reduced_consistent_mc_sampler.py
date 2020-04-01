@@ -1,16 +1,15 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import torch
 from blackhc.progress_bar import with_progress_bar
-from torch import nn as nn
 from torch.utils import data
 from torch.utils.data import DataLoader
 
 import src.active_learning_data
 import src.mc_dropout
-import torch
-
 import src.torch_utils
+
 from .acquisition_functions import AcquisitionFunction
 
 
@@ -126,8 +125,9 @@ def reduced_eval_consistent_bayesian_model(
                 # Compute the score if it's needed: we are going to reduce the dataset or we're in the last iteration.
                 if next_size < B or k_upper == k:
                     # Calculate the scores (mutual information) of logits_B_K_C
-                    scores_B: Optional[torch.Tensor] = acquisition_function.compute_scores(
-                        logits_B_K_C, available_loader=subset_dataloader, device=device
+                    scores_B: Optional[torch.Tensor] = acquisition_function.compute_scores(  # type: ignore[arg-type]
+                        logits_B_K_C,
+                        device=device,  # previously this function had `available_loader=subset_dataloader` as an arg to compute_scores, but it was unused in the function.
                     )
                 else:
                     scores_B = None

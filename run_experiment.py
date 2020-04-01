@@ -1,26 +1,21 @@
 import argparse
+import functools
+import itertools
+import os
 import sys
-import torch
-from typing import Callable, Any
-
-from .acquisition_method import AcquisitionMethod
-from .context_stopwatch import ContextStopwatch
-from .dataset_enum import DatasetEnum, get_targets, get_experiment_data, train_model
-from .random_fixed_length_sampler import RandomFixedLengthSampler
-from .torch_utils import get_base_indices
-import torch.utils.data as data
-
-from .acquisition_functions import AcquisitionFunction
-
-from blackhc import laaos
+from typing import Any, Callable
 
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
+import torch
+from blackhc import laaos
 
-import functools
-import itertools
-
-import os
+from src.acquisition_functions import AcquisitionFunction
+from src.acquisition_method import AcquisitionMethod
+from src.context_stopwatch import ContextStopwatch
+from src.dataset_enum import DatasetEnum, get_experiment_data, get_targets
+from src.random_fixed_length_sampler import RandomFixedLengthSampler
+from src.torch_utils import get_base_indices
 
 
 def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -34,7 +29,7 @@ def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argpa
         help="validation set size (0 for len(test_dataset) or whatever we got from the dataset)",
     )
     parser.add_argument(
-        "--early_stopping_patience", type=int, default=1, help="# patience epochs for early stopping per iteration"
+        "--early_stopping_patience", type=int, default=1, help="# patience epochs for early stopping per iteration",
     )
     parser.add_argument("--epochs", type=int, default=1, help="number of epochs to train")
     parser.add_argument("--epoch_samples", type=int, default=5056, help="number of epochs to train")
@@ -45,13 +40,15 @@ def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argpa
         default=10,
         help="number of active samples to add per active learning iteration",
     )
-    parser.add_argument("--target_num_acquired_samples", type=int, default=800, help="max number of samples to acquire")
+    parser.add_argument(
+        "--target_num_acquired_samples", type=int, default=800, help="max number of samples to acquire",
+    )
     parser.add_argument("--target_accuracy", type=float, default=0.98, help="max accuracy to train to")
     parser.add_argument("--no_cuda", action="store_true", default=False, help="disables CUDA training")
     parser.add_argument("--quickquick", action="store_true", default=False, help="uses a very reduced dataset")
     parser.add_argument("--seed", type=int, default=1, help="random seed")
     parser.add_argument(
-        "--log_interval", type=int, default=10, help="how many batches to wait before logging training status"
+        "--log_interval", type=int, default=10, help="how many batches to wait before logging training status",
     )
     parser.add_argument(
         "--initial_samples_per_class",
@@ -131,17 +128,17 @@ def main() -> None:
     )
     parser.add_argument("--experiment_task_id", type=str, default=None, help="experiment id")
     parser.add_argument(
-        "--experiments_laaos", type=str, default=None, help="Laaos file that contains all experiment task configs"
+        "--experiments_laaos", type=str, default=None, help="Laaos file that contains all experiment task configs",
     )
     parser.add_argument(
-        "--experiment_description", type=str, default="Trying stuff..", help="Description of the experiment"
+        "--experiment_description", type=str, default="Trying stuff..", help="Description of the experiment",
     )
     parser = create_experiment_config_argparser(parser)
     args = parser.parse_args()
 
     if args.experiments_laaos is not None:
         config = laaos.safe_load(
-            args.experiments_laaos, expose_symbols=(AcquisitionFunction, AcquisitionMethod, DatasetEnum)
+            args.experiments_laaos, expose_symbols=(AcquisitionFunction, AcquisitionMethod, DatasetEnum),
         )
         # Merge the experiment config with args.
         # Args take priority.
@@ -214,7 +211,7 @@ def main() -> None:
 
     # Data available for active learning (D_pool)
     available_loader = torch.utils.data.DataLoader(
-        experiment_data.available_dataset, batch_size=args.scoring_batch_size, shuffle=False, **kwargs
+        experiment_data.available_dataset, batch_size=args.scoring_batch_size, shuffle=False, **kwargs,
     )
 
     # Validation dataset
@@ -234,7 +231,7 @@ def main() -> None:
     for iteration in itertools.count(1):
 
         def desc(name: str) -> Callable[[Any], str]:
-            return lambda engine: "%s: %s (%s samples)" % (name, iteration, len(experiment_data.train_dataset))
+            return lambda engine: "%s: %s (%s samples)" % (name, iteration, len(experiment_data.train_dataset),)
 
         # Train the model with available data
         with ContextStopwatch() as train_model_stopwatch:

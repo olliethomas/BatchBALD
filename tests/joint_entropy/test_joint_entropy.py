@@ -1,11 +1,12 @@
-import blackhc.notebook
+import itertools
+from pathlib import Path
+
+import numpy as np
+import torch
+
 import src.joint_entropy.exact as exact
 import src.joint_entropy.sampling as sampling
-
 import src.torch_utils
-import itertools
-import torch
-import numpy as np
 
 
 # As basic as it gets...
@@ -32,7 +33,8 @@ def basic_exact_joint_entropy(logits_N_K_C):
 
 
 def load_logits():
-    logits_np = np.load("./src/joint_entropy/test_logits.npy", allow_pickle=False)
+    file_path = Path(__file__).parent / "test_logits.npy"
+    logits_np = np.load(file_path.resolve(), allow_pickle=False)
     return torch.as_tensor(logits_np)
 
 

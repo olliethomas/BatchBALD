@@ -1,14 +1,14 @@
 from __future__ import print_function
-import torch
-from torch import jit
 
 import collections
-import numpy as np
-import math
 import gc
-from typing import Tuple, List, Dict, Optional, DefaultDict
-from torch.utils.data import Subset, Dataset
-from torch import Tensor
+import math
+from typing import DefaultDict, Dict, List, Optional, Tuple
+
+import numpy as np
+import torch
+from torch import Tensor, jit
+from torch.utils.data import Dataset, Subset
 
 DEBUG_CHECKS = False
 
@@ -71,7 +71,9 @@ def should_reduce_batch_size(exception: Exception) -> bool:
 
 
 def cuda_meminfo() -> None:
-    print("Total:", torch.cuda.memory_allocated() / 2 ** 30, " GB Cached: ", torch.cuda.memory_cached() / 2 ** 30, "GB")
+    print(
+        "Total:", torch.cuda.memory_allocated() / 2 ** 30, " GB Cached: ", torch.cuda.memory_cached() / 2 ** 30, "GB",
+    )
     print(
         "Max Total:",
         torch.cuda.max_memory_allocated() / 2 ** 30,
@@ -81,7 +83,7 @@ def cuda_meminfo() -> None:
     )
 
 
-@jit.script
+# @jit.script
 def logit_mean(logits: Tensor, dim: int, keepdim: bool = False) -> Tensor:
     r"""Computes $\log \left ( \frac{1}{n} \sum_i p_i \right ) =
     \log \left ( \frac{1}{n} \sum_i e^{\log p_i} \right )$.
@@ -91,12 +93,12 @@ def logit_mean(logits: Tensor, dim: int, keepdim: bool = False) -> Tensor:
     return torch.logsumexp(logits, dim=dim, keepdim=keepdim) - math.log(logits.shape[dim])
 
 
-@jit.script
+# @jit.script
 def entropy(logits: Tensor, dim: int, keepdim: bool = False) -> Tensor:
     return -torch.sum((torch.exp(logits) * logits).double(), dim=dim, keepdim=keepdim)
 
 
-@jit.script
+# @jit.script
 def mutual_information(logits_B_K_C: Tensor) -> Tensor:
     """Returns the mutual information for each element of the batch,
     determined by the K MC samples"""
@@ -110,7 +112,7 @@ def mutual_information(logits_B_K_C: Tensor) -> Tensor:
     return mutual_info_B
 
 
-@jit.script
+# @jit.script
 def mean_stddev(logits_B_K_C: Tensor) -> Tensor:
     stddev_B_C = torch.std(torch.exp(logits_B_K_C).double(), dim=1, keepdim=True).squeeze(1)
     return torch.mean(stddev_B_C, dim=1, keepdim=True).squeeze(1)

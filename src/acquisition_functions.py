@@ -1,13 +1,11 @@
-import torch
-from torch import Tensor
-from blackhc.progress_bar import with_progress_bar
+import enum
 from typing import Callable
 
-from torch.utils.data import DataLoader
+import torch
+from blackhc.progress_bar import with_progress_bar
+from torch import Tensor
 
 import src.torch_utils
-
-import enum
 
 
 def random_acquisition_function(logits_b_K_C: Tensor) -> Tensor:
@@ -57,7 +55,7 @@ class AcquisitionFunction(enum.Enum):
         else:
             raise NotImplementedError(f"{self} not supported yet!")
 
-    def compute_scores(self, logits_B_K_C: Tensor, available_loader: DataLoader, device: torch.device) -> Tensor:
+    def compute_scores(self, logits_B_K_C: Tensor, device: torch.device) -> Tensor:
         scorer = self.scorer
 
         if self == AcquisitionFunction.random:
@@ -77,7 +75,7 @@ class AcquisitionFunction(enum.Enum):
                 batch_size = 4096
 
             for scores_b, logits_b_K_C in with_progress_bar(
-                src.torch_utils.split_tensors(scores_B, logits_B_K_C, batch_size), unit_scale=batch_size
+                src.torch_utils.split_tensors(scores_B, logits_B_K_C, batch_size), unit_scale=batch_size,
             ):
                 scores_b.copy_(scorer(logits_b_K_C.to(device)), non_blocking=True)
 
