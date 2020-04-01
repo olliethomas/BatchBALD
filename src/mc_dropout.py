@@ -1,12 +1,15 @@
+from typing import Optional, Tuple, List
+
 from torch.nn import Module
 import torch
 import threading
+from torch import Tensor
 
 DROPOUT_PROB = 0.5
 
 
-def set_dropout_p(bayesian_net: Module, p):
-    def update_k(module: Module):
+def set_dropout_p(bayesian_net: Module, p: float) -> None:
+    def update_k(module: Module) -> None:
         if isinstance(module, _MCDropout):
             module.p = p
 
@@ -19,7 +22,7 @@ class BayesianModule(Module):
     To be efficient, the module allows for a part of the forward pass to be deterministic.
     """
 
-    k = None
+    k: Optional[int] = None
 
     def __init__(self, num_classes: int):
         super().__init__()
@@ -28,7 +31,7 @@ class BayesianModule(Module):
         self.num_classes: int = num_classes
 
     # Returns B x n x output
-    def forward(self, input_B: torch.Tensor, k: int):
+    def forward(self, input_B: Tensor, k: int) -> Tensor:  # type: ignore[override]
         BayesianModule.k = k
 
         # First do the deterministic part of the network that won't change for the k samples
@@ -41,21 +44,21 @@ class BayesianModule(Module):
         mc_output_B_K = BayesianModule.unflatten_tensor(mc_output_BK, k)
         return mc_output_B_K
 
-    def deterministic_forward_impl(self, input: torch.Tensor):
+    def deterministic_forward_impl(self, input: Tensor) -> Tensor:
         return input
 
-    def mc_forward_impl(self, mc_input_BK: torch.Tensor):
+    def mc_forward_impl(self, mc_input_BK: Tensor) -> Tensor:
         return mc_input_BK
 
-    def set_dropout_p(self, p):
-        def update_k(module: Module):
+    def set_dropout_p(self, p: float) -> None:
+        def update_k(module: Module) -> None:
             if isinstance(module, _MCDropout):
                 module.p = p
 
         self.apply(update_k)
 
     @staticmethod
-    def unflatten_tensor(input: torch.Tensor, k: int):
+    def unflatten_tensor(input: Tensor, k: int) -> Tensor:
         """Expands the first dimension of a tensor in two dimensions,
         k determines the size of the secon
         """
@@ -63,12 +66,12 @@ class BayesianModule(Module):
         return input
 
     @staticmethod
-    def flatten_tensor(mc_input: torch.Tensor):
+    def flatten_tensor(mc_input: Tensor) -> Tensor:
         """Flattens the first two dimensions of a tensor in one"""
         return mc_input.flatten(0, 1)
 
     @staticmethod
-    def mc_tensor(input: torch.tensor, k: int):
+    def mc_tensor(input: Tensor, k: int) -> Tensor:
         """Takes a tensor and repeates all other dimensions along the first
         dimension k times"""
         mc_shape = [input.shape[0], k] + list(input.shape[1:])
@@ -78,37 +81,37 @@ class BayesianModule(Module):
 class _MCDropout(Module):
     __constants__ = ["p"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.k = None
+        self.k: Optional[int] = None
 
         p = DROPOUT_PROB
 
         if p < 0 or p > 1:
             raise ValueError("dropout probability has to be between 0 and 1, " "but got {}".format(p))
         self.p = p
-        self.mask = None
+        self.mask: Optional[Tensor] = None
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return "p={}".format(self.p)
 
-    def reset_mask(self):
+    def reset_mask(self) -> None:
         self.mask = None
 
-    def train(self, mode=True):
+    def train(self, mode: bool = True) -> None:  # type: ignore[override]
         super().train(mode)  # Train called with False sets to eval mode
         if not mode:  # Reset mask every time when we are in train mode
             self.reset_mask()
 
-    def _get_sample_mask_shape(self, sample_shape):
+    def _get_sample_mask_shape(self, sample_shape: torch.Size) -> torch.Size:
         return sample_shape
 
-    def _create_mask(self, input, k):
-        mask_shape = [1, k] + list(self._get_sample_mask_shape(input.shape[1:]))
+    def _create_mask(self, input: Tensor, k: int) -> Tensor:
+        mask_shape = [1, k] + list(self._get_sample_mask_shape(input.shape[1:]))  # type: ignore[arg-type]
         mask = torch.empty(mask_shape, dtype=torch.uint8, device=input.device).bernoulli_(self.p)
         return mask
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: Tensor) -> Tensor:  # type: ignore[override]
         if self.p == 0.0:
             return input
 
@@ -116,16 +119,16 @@ class _MCDropout(Module):
         if self.training:
             # Create a new mask on each call and for each batch element.
             k = input.shape[0]
-            mask = self._create_mask(input, k)
+            mask = self._create_mask(input, k)  # type: ignore[arg-type]
         else:
             if self.mask is None:
                 # print('recreating mask', self)
                 # Recreate mask.
-                self.mask = self._create_mask(input, k)
+                self.mask = self._create_mask(input, k)  # type: ignore[arg-type]
 
             mask = self.mask
 
-        mc_input = BayesianModule.unflatten_tensor(input, k)
+        mc_input = BayesianModule.unflatten_tensor(input, k)  # type: ignore[arg-type]
         mc_output = mc_input.masked_fill(mask, 0) / (1 - self.p)
 
         # Flatten MCDI, batch into one dimension again.
@@ -205,5 +208,5 @@ class MCDropout2d(_MCDropout):
        http://arxiv.org/abs/1411.4280
     """
 
-    def _get_sample_mask_shape(self, sample_shape):
+    def _get_sample_mask_shape(self, sample_shape: torch.Size) -> List[int]:  # type: ignore[override]
         return [sample_shape[0]] + [1] * (len(sample_shape) - 1)

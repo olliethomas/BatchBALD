@@ -1,5 +1,8 @@
+from typing import Optional
+
 from blackhc.progress_bar import with_progress_bar
 from torch import nn as nn
+from torch.utils.data import DataLoader
 
 import src.mc_dropout
 import torch
@@ -11,9 +14,16 @@ sampler_model_cuda_chunk_size = 1024
 
 
 def eval_bayesian_model_consistent(
-    bayesian_model: src.mc_dropout.BayesianModule, available_loader, num_classes, k=20, device=None
-):
+    bayesian_model: src.mc_dropout.BayesianModule,
+    available_loader: DataLoader,
+    num_classes: int,
+    k: int = 20,
+    device: Optional[torch.device] = None,
+) -> torch.Tensor:
     global eval_bayesian_model_consistent_cuda_chunk_size
+
+    if device is None:
+        device = torch.device("cpu")
 
     with torch.no_grad():
         # NOTE: I'm hard-coding 10 classes here!
@@ -39,7 +49,7 @@ def eval_bayesian_model_consistent(
                     batch = batch.to(device)
                     # batch_size x ws x classes
                     mc_output_B_K_C = bayesian_model(batch, k_upper - k_lower)
-                    logits_B_K_C[lower:upper, k_lower:k_upper].copy_(mc_output_B_K_C.double(), non_blocking=True)
+                    logits_B_K_C[lower:upper, k_lower:k_upper].copy_(mc_output_B_K_C.double(), non_blocking=True)  # type: ignore[attr-defined]
 
             except RuntimeError as exception:
                 if src.torch_utils.should_reduce_batch_size(exception):
@@ -63,7 +73,7 @@ class NoDropoutModel(nn.Module):
         super().__init__()
         self.bayesian_net = bayesian_net
 
-    def forward(self, input):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         self.bayesian_net.set_dropout_p(0)
         mc_output_B_1_C = self.bayesian_net(input, 1)
         self.bayesian_net.set_dropout_p(src.mc_dropout.DROPOUT_PROB)
@@ -71,13 +81,13 @@ class NoDropoutModel(nn.Module):
 
 
 class SamplerModel(nn.Module):
-    def __init__(self, bayesian_net: src.mc_dropout.BayesianModule, k):
+    def __init__(self, bayesian_net: src.mc_dropout.BayesianModule, k: int) -> None:
         super().__init__()
         self.bayesian_net = bayesian_net
         self.num_classes = bayesian_net.num_classes
         self.k = k
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         global sampler_model_cuda_chunk_size
         if self.training:
             return src.torch_utils.logit_mean(self.bayesian_net(input, self.k), dim=1, keepdim=False)

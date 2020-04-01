@@ -1,24 +1,27 @@
 import collections
+from typing import Optional, Any, Dict, List
 
 import ignite
-from torch.utils import data as data
+from blackhc.laaos import StoreRoot
+from ignite.engine import Engine
+from torch.utils.data import DataLoader
 
 
-def epoch_chain(engine: ignite.engine.Engine, then_engine: ignite.engine.Engine, dataloader: data.DataLoader):
+def epoch_chain(engine: Engine, then_engine: Engine, dataloader: DataLoader) -> None:
     @engine.on(ignite.engine.Events.EPOCH_COMPLETED)
-    def on_complete(_):
+    def on_complete(_: Any) -> None:
         then_engine.run(dataloader)
 
 
-def chain(engine: ignite.engine.Engine, then_engine: ignite.engine.Engine, dataloader: data.DataLoader):
+def chain(engine: Engine, then_engine: Engine, dataloader: DataLoader) -> None:
     @engine.on(ignite.engine.Events.COMPLETED)
-    def on_complete(_):
+    def on_complete(_: Any) -> None:
         then_engine.run(dataloader)
 
 
-def log_epoch_results(engine: ignite.engine.Engine, name, trainer: ignite.engine.Engine):
+def log_epoch_results(engine: Engine, name: str, trainer: Engine) -> None:
     @engine.on(ignite.engine.Events.COMPLETED)
-    def log(_):
+    def log(_: Any) -> None:
         metrics = engine.state.metrics
         avg_accuracy = metrics["accuracy"]
         avg_nll = metrics["nll"]
@@ -28,25 +31,25 @@ def log_epoch_results(engine: ignite.engine.Engine, name, trainer: ignite.engine
         )
 
 
-def log_results(engine: ignite.engine.Engine, name):
+def log_results(engine: Engine, name: str) -> None:
     @engine.on(ignite.engine.Events.COMPLETED)
-    def log(_):
+    def log(_: Any) -> None:
         metrics = engine.state.metrics
         avg_accuracy = metrics["accuracy"]
         avg_nll = metrics["nll"]
         print(f"{name} Results  " f"Avg accuracy: {avg_accuracy*100:.2f}% Avg loss: {avg_nll:.2f}")
 
 
-def store_iteration_results(engine: ignite.engine.Engine, store_object, log_interval=1000):
+def store_iteration_results(engine: Engine, store_object: List[Any], log_interval: int = 1000) -> None:
     @engine.on(ignite.engine.Events.ITERATION_COMPLETED)
-    def log(_):
+    def log(_: Any) -> None:
         if engine.state.iteration % log_interval == 0:
             store_object.append(engine.state.output)
 
 
-def store_epoch_results(engine: ignite.engine.Engine, store_object, name=None):
+def store_epoch_results(engine: Engine, store_object: StoreRoot, name: Optional[str] = None) -> None:
     @engine.on(ignite.engine.Events.EPOCH_COMPLETED)
-    def log(_):
+    def log(_: Any) -> None:
         metrics = engine.state.metrics
         if isinstance(store_object, collections.MutableSequence):
             store_object.append(metrics)

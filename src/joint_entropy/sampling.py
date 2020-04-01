@@ -1,12 +1,13 @@
 import torch
 from torch import jit
 
-from torch_utils import batch_multi_choices, gather_expand, split_tensors
+from src.torch_utils import batch_multi_choices, gather_expand, split_tensors
+from torch import Tensor
 
 # probs_N_K_C: #ys x #ws x #classes
 # samples_K_M: samples x #ws
 # samples = #ws * num_samples_per_w
-def sample_M_K_unified(probs_N_K_C, S=1000):
+def sample_M_K_unified(probs_N_K_C: Tensor, S: int = 1000) -> Tensor:
     probs_N_K_C = probs_N_K_C.double()
 
     K = probs_N_K_C.shape[1]
@@ -25,7 +26,7 @@ def sample_M_K_unified(probs_N_K_C, S=1000):
 # probs_N_K_C: #ys x #ws x #classes
 # samples_K_M: samples x #ws
 # samples = #ws * num_samples_per_w
-def sample_M_K(probs_N_K_C, S=1000):
+def sample_M_K(probs_N_K_C: Tensor, S: int = 1000) -> Tensor:
     probs_N_K_C = probs_N_K_C.double()
 
     K = probs_N_K_C.shape[1]
@@ -52,7 +53,7 @@ def sample_M_K(probs_N_K_C, S=1000):
 
 
 @jit.script
-def from_M_K(samples_M_K):
+def from_M_K(samples_M_K: Tensor) -> Tensor:
     probs_M = torch.mean(samples_M_K, dim=1, keepdim=False)
     nats_M = -torch.log(probs_M)
     entropy = torch.mean(nats_M)
@@ -62,7 +63,7 @@ def from_M_K(samples_M_K):
 # batch_ws_ps: #batch x #ws x #classes
 # prev_ws_samples: #ws x samples
 # entropy: #batch
-def batch(probs_B_K_C, samples_M_K):
+def batch(probs_B_K_C: Tensor, samples_M_K: Tensor) -> Tensor:
     # Bring everything to the correct format and to the same device
     probs_B_K_C = probs_B_K_C.double()
     samples_M_K = samples_M_K.double()
@@ -87,11 +88,11 @@ def batch(probs_B_K_C, samples_M_K):
 
     chunk_size = 256
     for entropy_b, p_b_M_C in split_tensors(entropy_B, p_B_M_C, chunk_size):
-        entropy_b.copy_(importance_weighted_entropy_p_b_M_C(p_b_M_C, q_1_M_1, M), non_blocking=True)
+        entropy_b.copy_(importance_weighted_entropy_p_b_M_C(p_b_M_C, q_1_M_1, M), non_blocking=True)  # type: ignore[attr-defined]
 
     return entropy_B
 
 
 @jit.script
-def importance_weighted_entropy_p_b_M_C(p_b_M_C, q_1_M_1, M: int):
+def importance_weighted_entropy_p_b_M_C(p_b_M_C: Tensor, q_1_M_1: Tensor, M: int) -> Tensor:
     return torch.sum(-torch.log(p_b_M_C) * p_b_M_C / q_1_M_1, dim=(1, 2)) / M

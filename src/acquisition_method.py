@@ -1,5 +1,7 @@
 import enum
+from typing import Optional
 
+import torch
 from torch import nn as nn
 
 import src.independent_batch_acquisition
@@ -14,23 +16,23 @@ class AcquisitionMethod(enum.Enum):
 
     def acquire_batch(
         self,
-        bayesian_model: nn.Module,
+        bayesian_model: src.mc_dropout.BayesianModule,
         acquisition_function: AcquisitionFunction,
-        available_loader,
-        num_classes,
-        k,
-        b,
-        min_candidates_per_acquired_item,
-        min_remaining_percentage,
-        initial_percentage,
-        reduce_percentage,
-        device=None,
+        available_loader: torch.utils.data.DataLoader,
+        num_classes: int,
+        k: int,
+        b: int,
+        min_candidates_per_acquired_item: int,
+        min_remaining_percentage: float,
+        initial_percentage: int,
+        reduce_percentage: int,
+        device: Optional[torch.device] = None,
     ) -> AcquisitionBatch:
         target_size = max(
             min_candidates_per_acquired_item * b, len(available_loader.dataset) * min_remaining_percentage // 100
         )
 
-        if self == self.independent:
+        if self == self.independent:  # type: ignore[comparison-overlap]
             return src.independent_batch_acquisition.compute_acquisition_bag(
                 bayesian_model=bayesian_model,
                 acquisition_function=acquisition_function,
@@ -42,7 +44,8 @@ class AcquisitionMethod(enum.Enum):
                 available_loader=available_loader,
                 device=device,
             )
-        elif self == self.multibald:  # This seems to be the default used in experiment
+        # This seems to be the default used in experiment
+        elif self == self.multibald:  # type: ignore[comparison-overlap]
             return src.multi_bald.compute_multi_bald_batch(
                 bayesian_model=bayesian_model,
                 available_loader=available_loader,
@@ -51,7 +54,7 @@ class AcquisitionMethod(enum.Enum):
                 b=b,
                 initial_percentage=initial_percentage,
                 reduce_percentage=reduce_percentage,
-                target_size=target_size,
+                target_size=target_size,  # type: ignore[arg-type]
                 device=device,
             )
         else:

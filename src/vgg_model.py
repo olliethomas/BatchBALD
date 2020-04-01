@@ -3,6 +3,8 @@ from torch import Tensor
 from torch.hub import load_state_dict_from_url
 
 from torch.nn import functional as F
+from typing import List, Any, Dict
+
 import src.mc_dropout
 
 __all__ = ["VGG", "vgg11", "vgg11_bn", "vgg13", "vgg13_bn", "vgg16", "vgg16_bn", "vgg19_bn", "vgg19"]
@@ -24,7 +26,9 @@ class VGG(src.mc_dropout.BayesianModule):
     """VGG with BatchNorm performs best.
     We only add MCDropout in the classifier head (where VGG used dropout before, too)."""
 
-    def __init__(self, features, num_classes=1000, init_weights=True, smaller_head=False):
+    def __init__(
+        self, features: nn.Module, num_classes: int = 1000, init_weights: bool = True, smaller_head: bool = False
+    ) -> None:
         super().__init__(num_classes)
 
         self.features = features
@@ -55,19 +59,19 @@ class VGG(src.mc_dropout.BayesianModule):
         if init_weights:
             self.apply(self.initialize_weights)
 
-    def deterministic_forward_impl(self, x: Tensor):
+    def deterministic_forward_impl(self, x: Tensor) -> Tensor:
         x = self.features(x)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         return x
 
-    def mc_forward_impl(self, x: Tensor):
+    def mc_forward_impl(self, x: Tensor) -> Tensor:
         x = self.classifier(x)
         x = F.log_softmax(x, dim=1)
         return x
 
     @staticmethod
-    def initialize_weights(m):
+    def initialize_weights(m: nn.Module) -> None:
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             if m.bias is not None:
@@ -80,7 +84,7 @@ class VGG(src.mc_dropout.BayesianModule):
             nn.init.constant_(m.bias, 0)
 
 
-def make_layers(cfg, batch_norm=False):
+def make_layers(cfg: List[Any], batch_norm: bool = False) -> nn.Module:
     layers = []
     in_channels = 3
     for v in cfg:
@@ -93,9 +97,9 @@ def make_layers(cfg, batch_norm=False):
         else:
             conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
             if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]  # type: ignore[list-item]
             else:
-                layers += [conv2d, nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.ReLU(inplace=True)]  # type: ignore[list-item]
             in_channels = v
     return nn.Sequential(*layers)
 
@@ -108,7 +112,15 @@ cfgs = {
 }
 
 
-def _vgg(arch, cfg, batch_norm, pretrained, progress, pretrained_features_only=False, **kwargs):
+def _vgg(
+    arch: str,
+    cfg: str,
+    batch_norm: bool,
+    pretrained: bool,
+    progress: bool,
+    pretrained_features_only: bool = False,
+    **kwargs: Any,
+) -> VGG:
     if pretrained:
         kwargs["init_weights"] = False
     model = VGG(make_layers(cfgs[cfg], batch_norm=batch_norm), **kwargs)
@@ -125,7 +137,7 @@ def _vgg(arch, cfg, batch_norm, pretrained, progress, pretrained_features_only=F
     return model
 
 
-def vgg11(pretrained=False, progress=True, **kwargs):
+def vgg11(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 11-layer model (configuration "A")
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -134,7 +146,7 @@ def vgg11(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg11", "A", False, pretrained, progress, **kwargs)
 
 
-def vgg11_bn(pretrained=False, progress=True, **kwargs):
+def vgg11_bn(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 11-layer model (configuration "A") with batch normalization
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -143,7 +155,7 @@ def vgg11_bn(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg11_bn", "A", True, pretrained, progress, **kwargs)
 
 
-def vgg13(pretrained=False, progress=True, **kwargs):
+def vgg13(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 13-layer model (configuration "B")
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -152,7 +164,7 @@ def vgg13(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg13", "B", False, pretrained, progress, **kwargs)
 
 
-def vgg13_bn(pretrained=False, progress=True, **kwargs):
+def vgg13_bn(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 13-layer model (configuration "B") with batch normalization
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -161,7 +173,7 @@ def vgg13_bn(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg13_bn", "B", True, pretrained, progress, **kwargs)
 
 
-def vgg16(pretrained=False, progress=True, **kwargs):
+def vgg16(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 16-layer model (configuration "D")
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -170,7 +182,7 @@ def vgg16(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg16", "D", False, pretrained, progress, **kwargs)
 
 
-def vgg16_bn(pretrained=False, progress=True, **kwargs):
+def vgg16_bn(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 16-layer model (configuration "D") with batch normalization
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -179,7 +191,7 @@ def vgg16_bn(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg16_bn", "D", True, pretrained, progress, **kwargs)
 
 
-def vgg16_cinic10_bn(pretrained=False, progress=True, **kwargs):
+def vgg16_cinic10_bn(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 16-layer model (configuration "D") with batch normalization
 
     Inspired by: https://github.com/geifmany/cifar-vgg/blob/master/cifar100vgg.py to follow
@@ -202,7 +214,7 @@ def vgg16_cinic10_bn(pretrained=False, progress=True, **kwargs):
     )
 
 
-def vgg19(pretrained=False, progress=True, **kwargs):
+def vgg19(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 19-layer model (configuration "E")
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -211,7 +223,7 @@ def vgg19(pretrained=False, progress=True, **kwargs):
     return _vgg("vgg19", "E", False, pretrained, progress, **kwargs)
 
 
-def vgg19_bn(pretrained=False, progress=True, **kwargs):
+def vgg19_bn(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> VGG:
     """VGG 19-layer model (configuration 'E') with batch normalization
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet

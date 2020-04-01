@@ -1,8 +1,8 @@
 import blackhc.notebook
-import joint_entropy.exact as exact
-import joint_entropy.sampling as sampling
+import src.joint_entropy.exact as exact
+import src.joint_entropy.sampling as sampling
 
-import torch_utils
+import src.torch_utils
 import itertools
 import torch
 import numpy as np
@@ -17,7 +17,7 @@ def basic_exact_joint_entropy(logits_N_K_C):
     for index in itertools.product(range(C), repeat=N):
         expanded_index = torch.as_tensor(index, device=device).reshape((-1, 1, 1))
         # N x K x 1
-        N_K = torch_utils.gather_expand(N_K_C, dim=2, index=expanded_index)
+        N_K = src.torch_utils.gather_expand(N_K_C, dim=2, index=expanded_index)
         # N x K
         reshaped_N_K = N_K.reshape(N, K)
         # K

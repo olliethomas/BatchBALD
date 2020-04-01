@@ -1,33 +1,37 @@
 import torch
+from torch import Tensor
 from blackhc.progress_bar import with_progress_bar
+from typing import Callable
+
+from torch.utils.data import DataLoader
 
 import src.torch_utils
 
 import enum
 
 
-def random_acquisition_function(logits_b_K_C):
+def random_acquisition_function(logits_b_K_C: Tensor) -> Tensor:
     # If we use this together with a heuristic, make it small, so the heuristic takes over after the
     # first random pick.
     return torch.rand(logits_b_K_C.shape[0], device=logits_b_K_C.device) * 0.00001
 
 
-def variation_ratios(logits_b_K_C):
+def variation_ratios(logits_b_K_C: Tensor) -> Tensor:
     # torch.max yields a tuple with (max, argmax).
     return torch.ones(logits_b_K_C.shape[0], dtype=logits_b_K_C.dtype, device=logits_b_K_C.device) - torch.exp(
         torch.max(src.torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)[0]
     )
 
 
-def mean_stddev_acquisition_function(logits_b_K_C):
+def mean_stddev_acquisition_function(logits_b_K_C: Tensor) -> Tensor:
     return src.torch_utils.mean_stddev(logits_b_K_C)
 
 
-def max_entropy_acquisition_function(logits_b_K_C):
+def max_entropy_acquisition_function(logits_b_K_C: Tensor) -> Tensor:
     return src.torch_utils.entropy(src.torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=-1)
 
 
-def bald_acquisition_function(logits_b_K_C):
+def bald_acquisition_function(logits_b_K_C: Tensor) -> Tensor:
     return src.torch_utils.mutual_information(logits_b_K_C)
 
 
@@ -39,7 +43,7 @@ class AcquisitionFunction(enum.Enum):
     mean_stddev = "mean_stddev"
 
     @property
-    def scorer(self):
+    def scorer(self) -> Callable[[Tensor], Tensor]:
         if self == AcquisitionFunction.random:
             return random_acquisition_function
         elif self == AcquisitionFunction.predictive_entropy:
@@ -51,13 +55,13 @@ class AcquisitionFunction(enum.Enum):
         elif self == AcquisitionFunction.mean_stddev:
             return mean_stddev_acquisition_function
         else:
-            return NotImplementedError(f"{self} not supported yet!")
+            raise NotImplementedError(f"{self} not supported yet!")
 
-    def compute_scores(self, logits_B_K_C, available_loader, device):
+    def compute_scores(self, logits_B_K_C: Tensor, available_loader: DataLoader, device: torch.device) -> Tensor:
         scorer = self.scorer
 
         if self == AcquisitionFunction.random:
-            return scorer(logits_B_K_C, None).double()
+            return scorer(logits_B_K_C).double()
 
         B, K, C = logits_B_K_C.shape
 

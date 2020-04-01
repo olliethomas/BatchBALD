@@ -1,27 +1,31 @@
+from typing import Optional
+
 import torch.nn as nn
 import torch
 import numpy as np
+from torch.utils.data import DataLoader
 
+import src
 from .acquisition_batch import AcquisitionBatch
 from .reduced_consistent_mc_sampler import reduced_eval_consistent_bayesian_model
 from .acquisition_functions import AcquisitionFunction
 
 
-def get_top_n(scores: np.ndarray, n):
+def get_top_n(scores: np.ndarray, n: int) -> np.ndarray:
     top_n = np.argpartition(scores, -n)[-n:]
     return top_n
 
 
 def compute_acquisition_bag(
-    bayesian_model: nn.Module,
+    bayesian_model: src.mc_dropout.BayesianModule,
     acquisition_function: AcquisitionFunction,
-    available_loader,
+    available_loader: DataLoader,
     num_classes: int,
     k: int,
     b: int,
     initial_percentage: int,
     reduce_percentage: int,
-    device=None,
+    device: Optional[torch.device] = None,
 ) -> AcquisitionBatch:
     if acquisition_function != AcquisitionFunction.random:
         result = reduced_eval_consistent_bayesian_model(
@@ -50,7 +54,7 @@ def compute_acquisition_bag(
         print(f"Acquisition bag: {top_k_indices}")
         print(f"Scores: {top_k_scores}")
 
-        return AcquisitionBatch(top_k_indices, top_k_scores, None)
+        return AcquisitionBatch(top_k_indices, top_k_scores, None)  # type: ignore[arg-type]
     else:
         picked_indices = torch.randperm(len(available_loader.dataset))[:b].numpy()
 

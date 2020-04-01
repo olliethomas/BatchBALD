@@ -96,6 +96,6 @@ def test_check_input_permutation(af_type: src.acquisition_functions.AcquisitionF
     output_b = estimator(mixture_b)
     output_c = estimator(mixture_c)
 
-    torch.testing.assert_allclose(
+    torch.testing.assert_allclose(  # type: ignore[attr-defined]
         torch.cat([output_a, output_b], dim=0), torch.cat([output_c[::2], output_c[1::2]], dim=0)
     )

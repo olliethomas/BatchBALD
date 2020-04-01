@@ -7,7 +7,7 @@ import src.torch_utils
 
 def test_get_balanced_samples():
     labels = torch.randint(0, 47, (1000000,))
-    ranges = src.torch_utils.get_balanced_sample_indices(labels, 47, 2)
+    ranges = src.torch_utils.get_balanced_sample_indices(labels, 47, 2)  # type: ignore[arg-type]
 
     for digit, samples in ranges.items():
         assert len(samples) == 2, f"Failed for digit class {digit}"

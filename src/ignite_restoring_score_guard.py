@@ -3,6 +3,9 @@ from ignite.engine import Engine, Events
 
 import pickle
 
+from typing import Callable, Optional, Any, ByteString
+from torch.optim import Optimizer  # type: ignore[attr-defined]
+
 
 class RestoringScoreGuard(object):
     """RestoringScoreGuard handler can be used to stop the training if no improvement after a given number of events
@@ -36,14 +39,14 @@ class RestoringScoreGuard(object):
     def __init__(
         self,
         *,
-        patience,
-        score_function,
-        out_of_patience_callback,
+        patience: float,
+        score_function: Callable[[Any], Any],
+        out_of_patience_callback: Callable[[], Any],
         training_engine: Engine,
         validation_engine: Engine,
-        module: torch.nn.Module = None,
-        optimizer: torch.optim.Optimizer = None,
-    ):
+        module: Optional[torch.nn.Module] = None,
+        optimizer: Optional[Optimizer] = None,  #
+    ) -> None:
 
         if not callable(score_function):
             raise TypeError("Argument score_function should be a function")
@@ -59,23 +62,23 @@ class RestoringScoreGuard(object):
         self.patience = patience
         self.counter = 0
 
-        self.best_score = None
-        self.best_module_state_dict = None
-        self.best_optimizer_state_dict = None
-        self.restore_epoch = None
+        self.best_score: Optional[float] = None
+        self.best_module_state_dict: Optional[bytes] = None
+        self.best_optimizer_state_dict: Optional[bytes] = None
+        self.restore_epoch: Optional[int] = None
 
         self.training_engine = training_engine
         self.validation_engine = validation_engine
         validation_engine.add_event_handler(Events.EPOCH_COMPLETED, self.on_epoch_completed)
         training_engine.add_event_handler(Events.COMPLETED, self.on_completed)
 
-    def snapshot(self):
+    def snapshot(self) -> None:
         if self.module is not None:
             self.best_module_state_dict = pickle.dumps(self.module.state_dict(keep_vars=False))
         if self.optimizer is not None:
             self.best_optimizer_state_dict = pickle.dumps(self.optimizer.state_dict())
 
-    def restore_best(self):
+    def restore_best(self) -> None:
         if self.best_module_state_dict is not None and self.module is not None:
             print(f"RestoringScoreGuard: Restoring best parameters. (Score: {self.best_score})")
             self.module.load_state_dict(pickle.loads(self.best_module_state_dict))
@@ -84,7 +87,7 @@ class RestoringScoreGuard(object):
             print("RestoringScoreGuard: Restoring optimizer.")
             self.optimizer.load_state_dict(pickle.loads(self.best_optimizer_state_dict))
 
-    def on_epoch_completed(self, _):
+    def on_epoch_completed(self, _: Any) -> None:
         score = self.score_function(self.validation_engine)
 
         if self.best_score is not None and score <= self.best_score:
@@ -103,7 +106,7 @@ class RestoringScoreGuard(object):
             self.snapshot()
             self.counter = 0
 
-    def on_completed(self, _):
+    def on_completed(self, _: Any) -> None:
         if self.restore_epoch is None or self.restore_epoch < self.training_engine.state.epoch:
             self.restore_best()
             self.restore_epoch = self.training_engine.state.epoch

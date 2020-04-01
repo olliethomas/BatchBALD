@@ -1,7 +1,10 @@
+from typing import Optional, List, Any
+
 import torch
 import torch.nn as nn
 
 from blackhc.progress_bar import with_progress_bar
+from torch.utils.data import DataLoader
 
 import src.joint_entropy.exact as joint_entropy_exact
 import src.joint_entropy.sampling as joint_entropy_sampling
@@ -11,22 +14,23 @@ import math
 from .acquisition_batch import AcquisitionBatch
 
 from .acquisition_functions import AcquisitionFunction
+from .mc_dropout import BayesianModule
 from .reduced_consistent_mc_sampler import reduced_eval_consistent_bayesian_model
+from torch import Tensor
 
-
-compute_multi_bald_bag_multi_bald_batch_size = None
+compute_multi_bald_bag_multi_bald_batch_size: Optional[int] = None
 
 
 def compute_multi_bald_batch(
-    bayesian_model: nn.Module,
-    available_loader,
-    num_classes,
-    k,  # Number of samples to use for monte carlo sampling
-    b,  # Acquisition batch size (How many samples do we want to label next)
-    target_size,
-    initial_percentage,
-    reduce_percentage,
-    device=None,
+    bayesian_model: BayesianModule,
+    available_loader: DataLoader,
+    num_classes: int,
+    k: int,  # Number of samples to use for monte carlo sampling
+    b: int,  # Acquisition batch size (How many samples do we want to label next)
+    target_size: int,
+    initial_percentage: int,
+    reduce_percentage: int,
+    device: Optional[torch.device] = None,
 ) -> AcquisitionBatch:
     result = reduced_eval_consistent_bayesian_model(
         bayesian_model=bayesian_model,
@@ -76,6 +80,8 @@ def compute_multi_bald_batch(
         num_samples = num_samples_per_ws * k
 
         # Decide how many samples should be calculated at once when determining the joint entropy
+        if device is None:
+            device = torch.device("cpu")
         if device.type == "cuda":
             # KC_memory = k*num_classes*8
             sample_MK_memory = num_samples * k * 8
@@ -93,9 +99,13 @@ def compute_multi_bald_batch(
         else:
             multi_bald_batch_size = 16
 
-        subset_acquisition_bag = []  # Indices of currently selected samples for next labeling (local indices)
-        global_acquisition_bag = []  # Indices of currently selected samples for next labeling (global indices)
-        acquisition_bag_scores = []
+        subset_acquisition_bag: List[
+            Any
+        ] = []  # Indices of currently selected samples for next labeling (local indices)
+        global_acquisition_bag: List[
+            Any
+        ] = []  # Indices of currently selected samples for next labeling (global indices)
+        acquisition_bag_scores: List[Any] = []
 
         # We use this for early-out in the b==0 case.
         MIN_SPREAD = 0.1
@@ -177,7 +187,7 @@ def compute_multi_bald_batch(
             winner_index = partial_multi_bald_B.argmax().item()
 
             # Actual MultiBALD is:
-            actual_multi_bald_B = partial_multi_bald_B[winner_index] - torch.sum(
+            actual_multi_bald_B = partial_multi_bald_B[winner_index] - torch.sum(  # type: ignore[index]
                 conditional_entropies_B[subset_acquisition_bag]
             )
             actual_multi_bald_B = actual_multi_bald_B.item()
@@ -187,7 +197,7 @@ def compute_multi_bald_batch(
             # If we early out, we don't take the point that triggers the early out.
             # Only allow early-out after acquiring at least 1 sample.
             if early_out and i > 1:
-                current_spread = actual_multi_bald_B[winner_index] - actual_multi_bald_B.median()
+                current_spread = actual_multi_bald_B[winner_index] - actual_multi_bald_B.median()  # type: ignore[index,union-attr]
                 if current_spread < MIN_SPREAD:
                     print("Early out")
                     break
@@ -197,14 +207,20 @@ def compute_multi_bald_batch(
             # Algorithm 1 : Line 5
             subset_acquisition_bag.append(winner_index)
             # We need to map the index back to the actual dataset.
-            global_acquisition_bag.append(subset_split.get_dataset_indices([winner_index]).item())
+            global_acquisition_bag.append(subset_split.get_dataset_indices([winner_index]).item())  # type: ignore[arg-type]
 
             print(f"Acquisition bag: {sorted(global_acquisition_bag)}")
 
     return AcquisitionBatch(global_acquisition_bag, acquisition_bag_scores, None)
 
 
-def batch_exact_joint_entropy(probs_B_K_C, prev_joint_probs_M_K, chunk_size, device, out_joint_entropies_B):
+def batch_exact_joint_entropy(
+    probs_B_K_C: Tensor,
+    prev_joint_probs_M_K: Tensor,
+    chunk_size: int,
+    device: torch.device,
+    out_joint_entropies_B: Tensor,
+) -> Tensor:
     """This one switches between devices, too."""
     for joint_entropies_b, probs_b_K_C in with_progress_bar(
         src.torch_utils.split_tensors(out_joint_entropies_B, probs_B_K_C, chunk_size), unit_scale=chunk_size
@@ -216,7 +232,13 @@ def batch_exact_joint_entropy(probs_B_K_C, prev_joint_probs_M_K, chunk_size, dev
     return joint_entropies_b
 
 
-def batch_exact_joint_entropy_logits(logits_B_K_C, prev_joint_probs_M_K, chunk_size, device, out_joint_entropies_B):
+def batch_exact_joint_entropy_logits(
+    logits_B_K_C: Tensor,
+    prev_joint_probs_M_K: Tensor,
+    chunk_size: int,
+    device: torch.device,
+    out_joint_entropies_B: Tensor,
+) -> Tensor:
     """This one switches between devices, too."""
     for joint_entropies_b, logits_b_K_C in with_progress_bar(
         src.torch_utils.split_tensors(out_joint_entropies_B, logits_B_K_C, chunk_size), unit_scale=chunk_size

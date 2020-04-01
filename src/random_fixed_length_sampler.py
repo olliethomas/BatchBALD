@@ -1,5 +1,6 @@
 import torch
 from torch.utils import data as data
+from typing import Iterator
 
 
 class RandomFixedLengthSampler(data.Sampler):
@@ -9,17 +10,17 @@ class RandomFixedLengthSampler(data.Sampler):
     This sampler takes a `dataset` and draws `target_length` samples from it (with repetition).
     """
 
-    def __init__(self, dataset: data.Dataset, target_length):
+    def __init__(self, dataset: data.Dataset, target_length: int) -> None:
         super().__init__(dataset)
         self.dataset = dataset
         self.target_length = target_length
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         # Ensure that we don't lose data by accident.
         if self.target_length < len(self.dataset):
             return iter(range(len(self.dataset)))
 
         return iter((torch.randperm(self.target_length) % len(self.dataset)).tolist())
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.target_length

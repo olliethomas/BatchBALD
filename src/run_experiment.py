@@ -1,6 +1,7 @@
 import argparse
 import sys
 import torch
+from typing import Callable, Any
 
 from .acquisition_method import AcquisitionMethod
 from .context_stopwatch import ContextStopwatch
@@ -22,7 +23,7 @@ import itertools
 import os
 
 
-def create_experiment_config_argparser(parser):
+def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--batch_size", type=int, default=64, help="input batch size for training")
     parser.add_argument("--scoring_batch_size", type=int, default=256, help="input batch size for scoring")
     parser.add_argument("--test_batch_size", type=int, default=256, help="input batch size for testing")
@@ -124,9 +125,9 @@ def create_experiment_config_argparser(parser):
     return parser
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="BatchBALD", formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)
+        description="BatchBALD", formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)  # type: ignore[arg-type]
     )
     parser.add_argument("--experiment_task_id", type=str, default=None, help="experiment id")
     parser.add_argument(
@@ -232,7 +233,7 @@ def main():
 
     for iteration in itertools.count(1):
 
-        def desc(name):
+        def desc(name: str) -> Callable[[Any], str]:
             return lambda engine: "%s: %s (%s samples)" % (name, iteration, len(experiment_data.train_dataset))
 
         # Train the model with available data
@@ -283,12 +284,12 @@ def main():
                 chosen_samples=original_batch_indices,
                 chosen_samples_score=batch.scores,
                 chosen_samples_orignal_score=batch.orignal_scores,
-                train_model_elapsed_time=train_model_stopwatch.elapsed_time,
-                batch_acquisition_elapsed_time=batch_acquisition_stopwatch.elapsed_time,
+                train_model_elapsed_time=train_model_stopwatch.elapsed_time,  # type: ignore[attr-defined]
+                batch_acquisition_elapsed_time=batch_acquisition_stopwatch.elapsed_time,  # type: ignore[attr-defined]
             )
         )
 
-        experiment_data.active_learning_data.acquire(batch.indices)
+        experiment_data.active_learning_data.acquire(batch.indices)  # type: ignore[arg-type]
 
         num_acquired_samples = len(experiment_data.active_learning_data.active_dataset) - len(
             experiment_data.initial_samples

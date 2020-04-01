@@ -5,39 +5,39 @@ from torch import jit
 import collections
 import numpy as np
 import math
-import typing
 import gc
-
+from typing import Tuple, List, Dict, Optional, DefaultDict
 from torch.utils.data import Subset, Dataset
+from torch import Tensor
 
 DEBUG_CHECKS = False
 
 
-def gc_cuda():
+def gc_cuda() -> None:
     gc.collect()
     torch.cuda.empty_cache()
 
 
-def get_cuda_total_memory():
+def get_cuda_total_memory() -> int:
     return torch.cuda.get_device_properties(0).total_memory
 
 
-def _get_cuda_assumed_available_memory():
+def _get_cuda_assumed_available_memory() -> int:
     return get_cuda_total_memory() - torch.cuda.memory_cached()
 
 
-def get_cuda_available_memory():
+def get_cuda_available_memory() -> int:
     # Always allow for 1 GB overhead.
     return _get_cuda_assumed_available_memory() - get_cuda_blocked_memory()
 
 
-def get_cuda_blocked_memory():
+def get_cuda_blocked_memory() -> int:
     # In GB steps
     available_memory = _get_cuda_assumed_available_memory()
     current_block = available_memory - 2 ** 30
     while True:
         try:
-            block = torch.empty((current_block,), dtype=torch.uint8, device="cuda")
+            block: Optional[Tensor] = torch.empty((current_block,), dtype=torch.uint8, device="cuda")
             break
         except RuntimeError as exception:
             if is_cuda_out_of_memory(exception):
@@ -51,13 +51,13 @@ def get_cuda_blocked_memory():
     return available_memory - current_block
 
 
-def is_cuda_out_of_memory(exception):
+def is_cuda_out_of_memory(exception: Exception) -> bool:
     return (
         isinstance(exception, RuntimeError) and len(exception.args) == 1 and "CUDA out of memory." in exception.args[0]
     )
 
 
-def is_cudnn_snafu(exception):
+def is_cudnn_snafu(exception: Exception) -> bool:
     # For/because of https://github.com/pytorch/pytorch/issues/4107
     return (
         isinstance(exception, RuntimeError)
@@ -66,11 +66,11 @@ def is_cudnn_snafu(exception):
     )
 
 
-def should_reduce_batch_size(exception):
+def should_reduce_batch_size(exception: Exception) -> bool:
     return is_cuda_out_of_memory(exception) or is_cudnn_snafu(exception)
 
 
-def cuda_meminfo():
+def cuda_meminfo() -> None:
     print("Total:", torch.cuda.memory_allocated() / 2 ** 30, " GB Cached: ", torch.cuda.memory_cached() / 2 ** 30, "GB")
     print(
         "Max Total:",
@@ -82,7 +82,7 @@ def cuda_meminfo():
 
 
 @jit.script
-def logit_mean(logits, dim: int, keepdim: bool = False):
+def logit_mean(logits: Tensor, dim: int, keepdim: bool = False) -> Tensor:
     r"""Computes $\log \left ( \frac{1}{n} \sum_i p_i \right ) =
     \log \left ( \frac{1}{n} \sum_i e^{\log p_i} \right )$.
 
@@ -92,12 +92,12 @@ def logit_mean(logits, dim: int, keepdim: bool = False):
 
 
 @jit.script
-def entropy(logits, dim: int, keepdim: bool = False):
+def entropy(logits: Tensor, dim: int, keepdim: bool = False) -> Tensor:
     return -torch.sum((torch.exp(logits) * logits).double(), dim=dim, keepdim=keepdim)
 
 
 @jit.script
-def mutual_information(logits_B_K_C):
+def mutual_information(logits_B_K_C: Tensor) -> Tensor:
     """Returns the mutual information for each element of the batch,
     determined by the K MC samples"""
     sample_entropies_B_K = entropy(logits_B_K_C, dim=-1)
@@ -111,19 +111,19 @@ def mutual_information(logits_B_K_C):
 
 
 @jit.script
-def mean_stddev(logits_B_K_C):
+def mean_stddev(logits_B_K_C: Tensor) -> Tensor:
     stddev_B_C = torch.std(torch.exp(logits_B_K_C).double(), dim=1, keepdim=True).squeeze(1)
     return torch.mean(stddev_B_C, dim=1, keepdim=True).squeeze(1)
 
 
-def partition_dataset(dataset: np.ndarray, mask):
+def partition_dataset(dataset: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return dataset[mask], dataset[~mask]
 
 
-def get_balanced_sample_indices(target_classes: typing.List, num_classes, n_per_digit=2) -> typing.Dict[int, list]:
+def get_balanced_sample_indices(target_classes: List[int], num_classes: int, n_per_digit: int = 2) -> Dict[int, list]:
     permed_indices = torch.randperm(len(target_classes))
 
-    initial_samples_by_class = collections.defaultdict(list)
+    initial_samples_by_class: DefaultDict = collections.defaultdict(list)
     if n_per_digit == 0:
         return initial_samples_by_class
 
@@ -146,11 +146,11 @@ def get_balanced_sample_indices(target_classes: typing.List, num_classes, n_per_
     return dict(initial_samples_by_class)
 
 
-def get_subset_base_indices(dataset: Subset, indices: typing.List[int]):
+def get_subset_base_indices(dataset: Subset, indices: List[int]) -> List[int]:
     return [int(dataset.indices[index]) for index in indices]
 
 
-def get_base_indices(dataset: Dataset, indices: typing.List[int]):
+def get_base_indices(dataset: Dataset, indices: List[int]) -> List[int]:
     if isinstance(dataset, Subset):
         return get_base_indices(dataset.dataset, get_subset_base_indices(dataset, indices))
     return indices
@@ -158,7 +158,7 @@ def get_base_indices(dataset: Dataset, indices: typing.List[int]):
 
 #### ADDED FOR HEURISTIC
 @jit.script
-def batch_jsd(batch_p, q):
+def batch_jsd(batch_p: Tensor, q: Tensor) -> Tensor:
     """
     :param batch_p: #batch x #classes
     :param q: #classes
@@ -186,7 +186,7 @@ def batch_jsd(batch_p, q):
 
 
 @jit.script
-def batch_multi_choices(probs_b_C, M: int):
+def batch_multi_choices(probs_b_C: Tensor, M: int) -> Tensor:
     """
     Returns sampled class labels accoding to the given prob. distribution
     """
@@ -199,7 +199,7 @@ def batch_multi_choices(probs_b_C, M: int):
     return choices_b_M
 
 
-def gather_expand(data, dim, index):
+def gather_expand(data: Tensor, dim: int, index: Tensor) -> Tensor:
     if DEBUG_CHECKS:
         assert len(data.shape) == len(index.shape)
         assert all(dr == ir or 1 in (dr, ir) for dr, ir in zip(data.shape, index.shape))
@@ -219,7 +219,7 @@ def gather_expand(data, dim, index):
     return torch.gather(data, dim, index)
 
 
-def split_tensors(output, input, chunk_size):
+def split_tensors(output: Tensor, input: Tensor, chunk_size: int) -> List[Tensor]:
     """Returns output and input tensor splits as tuples"""
     assert len(output) == len(input)
-    return list(zip(output.split(chunk_size), input.split(chunk_size)))
+    return list(zip(output.split(chunk_size), input.split(chunk_size)))  # type: ignore[arg-type]

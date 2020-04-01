@@ -1,13 +1,17 @@
 import ignite
+import torch
+from ignite.metrics import Metric, Loss
 from torch import optim as optim
 from torch.nn import functional as F
 from torch import nn
+from torch.utils.data import DataLoader
 
 import src.ignite_restoring_score_guard
 from .ignite_progress_bar import ignite_progress_bar
 from .ignite_utils import epoch_chain, chain, log_epoch_results, store_epoch_results, store_iteration_results
+from .mc_dropout import BayesianModule
 from .sampler_model import SamplerModel, NoDropoutModel
-from typing import NamedTuple
+from typing import NamedTuple, Dict, Union, Callable, Any, Optional
 
 
 class TrainModelResult(NamedTuple):
@@ -15,25 +19,25 @@ class TrainModelResult(NamedTuple):
     test_metrics: dict
 
 
-def build_metrics():
+def build_metrics() -> Dict[str, Union[Metric, Loss]]:
     return {"accuracy": ignite.metrics.Accuracy(), "nll": ignite.metrics.Loss(F.nll_loss)}
 
 
 def train_model(
-    model: nn.Module,
-    optimizer: optim.Optimizer,
-    max_epochs,
-    early_stopping_patience,
-    num_inference_samples,
-    test_loader,
-    train_loader,
-    validation_loader,
-    log_interval,
-    desc,
-    device,
-    lr_scheduler: optim.lr_scheduler._LRScheduler = None,
-    num_lr_epochs=0,
-    epoch_results_store=None,
+    model: BayesianModule,
+    optimizer: optim.Optimizer,  # type: ignore[name-defined]
+    max_epochs: int,
+    early_stopping_patience: int,
+    num_inference_samples: int,
+    test_loader: DataLoader,
+    train_loader: DataLoader,
+    validation_loader: DataLoader,
+    log_interval: int,
+    desc: Callable[[str], Callable[[Any], str]],
+    device: torch.device,
+    lr_scheduler: Optional[optim.lr_scheduler._LRScheduler] = None,
+    num_lr_epochs: int = 0,
+    epoch_results_store: Optional[Dict[str, Any]] = None,
 ) -> TrainModelResult:
     test_sampler = SamplerModel(model, k=min(num_inference_samples, 100)).to(device)
     validation_sampler = NoDropoutModel(model).to(device)
@@ -44,12 +48,12 @@ def train_model(
         validation_sampler, metrics=build_metrics(), device=device
     )
 
-    def out_of_patience():
+    def out_of_patience() -> None:
         nonlocal num_lr_epochs
         if num_lr_epochs <= 0 or lr_scheduler is None:
             trainer.terminate()
         else:
-            lr_scheduler.step()
+            lr_scheduler.step()  # type: ignore[call-arg]
             restoring_score_guard.patience = int(restoring_score_guard.patience * 1.5 + 0.5)
             print(f"New LRs: {[group['lr'] for group in optimizer.param_groups]}")
             num_lr_epochs -= 1

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from blackhc.progress_bar import with_progress_bar
 from torch import nn as nn
 from torch.utils import data
+from torch.utils.data import DataLoader
 
 import src.active_learning_data
 import src.mc_dropout
@@ -31,8 +33,8 @@ def reduced_eval_consistent_bayesian_model(
     initial_percentage: int,
     reduce_percentage: int,
     target_size: int,
-    available_loader,
-    device=None,
+    available_loader: DataLoader,
+    device: Optional[torch.device] = None,
 ) -> SubsetEvalResults:
     """Performs a scoring step with k inference samples while reducing the dataset to at most min_remaining_percentage.
 
@@ -62,6 +64,9 @@ def reduced_eval_consistent_bayesian_model(
     # We're done with available_loader in this function.
     available_loader = None
 
+    if device is None:
+        device = torch.device("cpu")
+
     with torch.no_grad():
         B = len(subset_split.available_dataset)
         C = num_classes
@@ -82,7 +87,7 @@ def reduced_eval_consistent_bayesian_model(
 
                 # Copy the old data over.
                 if k_lower > 0:
-                    logits_B_K_C[:, 0:k_lower, :].copy_(old_logit_B_K_C)
+                    logits_B_K_C[:, 0:k_lower, :].copy_(old_logit_B_K_C)  # type: ignore[attr-defined]
                     old_logit_B_K_C = None
 
                 # This resets the dropout masks.
@@ -97,7 +102,7 @@ def reduced_eval_consistent_bayesian_model(
                     batch = batch.to(device)
                     # batch_size x ws x classes
                     mc_output_B_K_C = bayesian_model(batch, k_upper - k_lower)
-                    logits_B_K_C[lower:upper, k_lower:k_upper].copy_(mc_output_B_K_C.double(), non_blocking=True)
+                    logits_B_K_C[lower:upper, k_lower:k_upper].copy_(mc_output_B_K_C.double(), non_blocking=True)  # type: ignore[attr-defined]
 
             except RuntimeError as exception:
                 if src.torch_utils.should_reduce_batch_size(exception):
@@ -121,7 +126,7 @@ def reduced_eval_consistent_bayesian_model(
                 # Compute the score if it's needed: we are going to reduce the dataset or we're in the last iteration.
                 if next_size < B or k_upper == k:
                     # Calculate the scores (mutual information) of logits_B_K_C
-                    scores_B = acquisition_function.compute_scores(
+                    scores_B: Optional[torch.Tensor] = acquisition_function.compute_scores(
                         logits_B_K_C, available_loader=subset_dataloader, device=device
                     )
                 else:
@@ -130,7 +135,7 @@ def reduced_eval_consistent_bayesian_model(
                 if next_size < B:
                     print("Reducing size", next_size)
                     # Get indices of samples sorted by increasing mutual information
-                    sorted_indices = torch.argsort(scores_B, descending=True)
+                    sorted_indices = torch.argsort(scores_B, descending=True)  # type: ignore[arg-type]
                     # Select next_size samples with smallest mutual information (ascending indices)
                     new_indices = torch.sort(sorted_indices[:next_size], descending=False)[0]
 
@@ -138,7 +143,7 @@ def reduced_eval_consistent_bayesian_model(
                     logits_B_K_C = logits_B_K_C[new_indices]
                     if k_upper == k:
                         logits_B_K_C = logits_B_K_C.clone().detach()
-                    scores_B = scores_B[new_indices].clone().detach()
+                    scores_B = scores_B[new_indices].clone().detach()  # type: ignore[index]
 
                     # Acquire all the low scorers
                     subset_split.acquire(sorted_indices[next_size:])
@@ -146,5 +151,5 @@ def reduced_eval_consistent_bayesian_model(
                 k_lower += chunk_size
 
     return SubsetEvalResults(
-        subset_split=subset_split, subset_dataloader=subset_dataloader, scores_B=scores_B, logits_B_K_C=logits_B_K_C
+        subset_split=subset_split, subset_dataloader=subset_dataloader, scores_B=scores_B, logits_B_K_C=logits_B_K_C  # type: ignore[arg-type]
     )

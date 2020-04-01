@@ -1,6 +1,7 @@
 import argparse
 import functools
 import itertools
+from typing import Any, Callable
 
 import torch
 
@@ -10,6 +11,7 @@ from blackhc import laaos
 
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
+from torch.utils.data import Sampler
 
 import src.torch_utils
 from .dataset_enum import DatasetEnum, get_experiment_data, get_targets
@@ -22,11 +24,11 @@ import logging
 import sys
 
 
-def main():
+def main() -> None:
     # Training settings
     parser = argparse.ArgumentParser(
         description="Pure training loop without AL",
-        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120),
+        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120),  # type: ignore[arg-type]
     )
     parser.add_argument("--batch_size", type=int, default=64, help="input batch size for training")
     parser.add_argument("--scoring_batch_size", type=int, default=256, help="input batch size for scoring")
@@ -130,17 +132,17 @@ def main():
         print("Using a balanced training set.")
         num_samples_per_class = reduced_train_length // dataset.num_classes
         experiment_data.active_learning_data.acquire(
-            list(
+            list(  # type: ignore[arg-type]
                 itertools.chain.from_iterable(
                     src.torch_utils.get_balanced_sample_indices(
-                        get_targets(experiment_data.available_dataset), dataset.num_classes, num_samples_per_class
+                        get_targets(experiment_data.available_dataset), dataset.num_classes, num_samples_per_class  # type: ignore[arg-type]
                     ).values()
                 )
             )
         )
 
     if len(experiment_data.train_dataset) < args.epoch_samples:
-        sampler = RandomFixedLengthSampler(experiment_data.train_dataset, args.epoch_samples)
+        sampler: Sampler = RandomFixedLengthSampler(experiment_data.train_dataset, args.epoch_samples)
     else:
         sampler = data.RandomSampler(experiment_data.train_dataset)
 
@@ -155,7 +157,7 @@ def main():
         experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
     )
 
-    def desc(name):
+    def desc(name: str) -> Callable[[Any], str]:
         return lambda engine: "%s" % name
 
     dataset.train_model(

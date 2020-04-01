@@ -4,12 +4,15 @@ import enum
 import itertools
 
 from torch import optim
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 import torch.utils.data as data
 import torch
+from torch import Tensor
 
-from typing import List
+from typing import List, Any, Optional, Tuple, Dict, Iterable, Iterator, Counter, Callable
+
+from torchvision.transforms import Compose
 
 import src.mnist_model
 import src.emnist_model
@@ -34,14 +37,14 @@ class ExperimentData:
 @dataclass
 class DataSource:
     train_dataset: Dataset
-    validation_dataset: Dataset = None
-    test_dataset: Dataset = None
-    shared_transform: object = None
-    train_transform: object = None
-    scoring_transform: object = None
+    validation_dataset: Optional[Dataset] = None
+    test_dataset: Optional[Dataset] = None
+    shared_transform: Optional[Any] = None
+    train_transform: Optional[Any] = None
+    scoring_transform: Optional[Any] = None
 
 
-def get_CINIC10(root="./"):
+def get_CINIC10(root: str = "./") -> DataSource:
     cinic_directory = root + "data/CINIC-10"
     cinic_mean = [0.47889522, 0.47227842, 0.43047404]
     cinic_std = [0.24205776, 0.23828046, 0.25874835]
@@ -65,7 +68,7 @@ def get_CINIC10(root="./"):
     )
 
 
-def get_MNIST():
+def get_MNIST() -> DataSource:
     # num_classes=10, input_size=28
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
@@ -74,11 +77,11 @@ def get_MNIST():
     return DataSource(train_dataset=train_dataset, test_dataset=test_dataset)
 
 
-def get_RepeatedMNIST():
+def get_RepeatedMNIST() -> DataSource:
     # num_classes = 10, input_size = 28
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     org_train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
-    train_dataset = data.ConcatDataset([org_train_dataset] * 3)
+    train_dataset: Dataset = data.ConcatDataset([org_train_dataset] * 3)
 
     test_dataset = datasets.MNIST("data", train=False, transform=transform)
     return DataSource(train_dataset=train_dataset, test_dataset=test_dataset)
@@ -94,7 +97,7 @@ class DatasetEnum(enum.Enum):
     mnist_w_noise = "mnist_w_noise"
     cinic10 = "cinic10"
 
-    def get_data_source(self):
+    def get_data_source(self) -> DataSource:
         if self == DatasetEnum.mnist:
             return get_MNIST()
         elif self in (
@@ -114,7 +117,7 @@ class DatasetEnum(enum.Enum):
             transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
             org_train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
 
-            def apply_noise(idx, sample):
+            def apply_noise(idx: Tensor, sample: Tensor) -> Tuple[Tensor, Tensor]:
                 data, target = sample
                 return data + dataset_noise[idx], target
 
@@ -150,11 +153,11 @@ class DatasetEnum(enum.Enum):
             if self == DatasetEnum.emnist:
                 # Balanced contains a test set
                 split_index = len(train_dataset) - len(test_dataset)
-                train_dataset, validation_dataset = src.subrange_dataset.dataset_subset_split(
-                    train_dataset, split_index
+                train_dataset, validation_dataset = src.subrange_dataset.dataset_subset_split(  # type: ignore[assignment]
+                    train_dataset, split_index  # type: ignore[arg-type]
                 )
             else:
-                validation_dataset = None
+                validation_dataset = None  # type: ignore[assignment]
             return DataSource(
                 train_dataset=train_dataset, test_dataset=test_dataset, validation_dataset=validation_dataset
             )
@@ -164,7 +167,7 @@ class DatasetEnum(enum.Enum):
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     @property
-    def num_classes(self):
+    def num_classes(self) -> int:
         if self in (
             DatasetEnum.mnist,
             DatasetEnum.repeated_mnist_w_noise,
@@ -180,7 +183,7 @@ class DatasetEnum(enum.Enum):
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
-    def create_bayesian_model(self, device):
+    def create_bayesian_model(self, device: torch.device) -> Any:
         num_classes = self.num_classes
         if self in (
             DatasetEnum.mnist,
@@ -197,29 +200,29 @@ class DatasetEnum(enum.Enum):
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
-    def create_optimizer(self, model):
+    def create_optimizer(self, model: Any) -> torch.optim.Adam:
         if self == DatasetEnum.cinic10:
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
 
-    def create_train_model_extra_args(self, optimizer):
+    def create_train_model_extra_args(self, optimizer: torch.optim.Adam) -> Dict[Any, Any]:
         return {}
 
     def train_model(
         self,
-        train_loader,
-        test_loader,
-        validation_loader,
-        num_inference_samples,
-        max_epochs,
-        early_stopping_patience,
-        desc,
-        log_interval,
-        device,
-        epoch_results_store=None,
-    ):
+        train_loader: DataLoader,
+        test_loader: DataLoader,
+        validation_loader: DataLoader,
+        num_inference_samples: int,
+        max_epochs: int,
+        early_stopping_patience: int,
+        desc: Callable[[str], Callable[[Any], str]],
+        log_interval: int,
+        device: torch.device,
+        epoch_results_store: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Any, int, Any]:
         model = self.create_bayesian_model(device)
         optimizer = self.create_optimizer(model)
         num_epochs, test_metrics = train_model(
@@ -241,15 +244,15 @@ class DatasetEnum(enum.Enum):
 
 
 def get_experiment_data(
-    data_source,
-    num_classes,
-    initial_samples,
-    reduced_dataset,
-    samples_per_class,
-    validation_set_size,
-    balanced_test_set,
-    balanced_validation_set,
-):
+    data_source: DataSource,
+    num_classes: int,
+    initial_samples: Optional[List[int]],
+    reduced_dataset: bool,
+    samples_per_class: int,
+    validation_set_size: int,
+    balanced_test_set: Dataset,
+    balanced_validation_set: Dataset,
+) -> ExperimentData:
     train_dataset, test_dataset, validation_dataset = (
         data_source.train_dataset,
         data_source.test_dataset,
@@ -261,25 +264,25 @@ def get_experiment_data(
         initial_samples = list(
             itertools.chain.from_iterable(
                 get_balanced_sample_indices(
-                    get_targets(train_dataset), num_classes=num_classes, n_per_digit=samples_per_class
+                    get_targets(train_dataset), num_classes=num_classes, n_per_digit=samples_per_class  # type: ignore[arg-type]
                 ).values()
             )
         )
 
     # Split off the validation dataset after acquiring the initial samples.
-    active_learning_data.acquire(initial_samples)
+    active_learning_data.acquire(initial_samples)  # type: ignore[arg-type]
 
     if validation_dataset is None:
         print("Acquiring validation set from training set.")
         if not validation_set_size:
-            validation_set_size = len(test_dataset)
+            validation_set_size = len(test_dataset)  # type: ignore[arg-type]
 
         if not balanced_validation_set:
             validation_dataset = active_learning_data.extract_dataset(validation_set_size)
         else:
             print("Using a balanced validation set")
-            validation_dataset = active_learning_data.extract_dataset_from_indices(
-                balance_dataset_by_repeating(
+            validation_dataset = active_learning_data.extract_dataset_from_indices(  # type: ignore[arg-type]
+                balance_dataset_by_repeating(  # type: ignore[arg-type]
                     active_learning_data.available_dataset, num_classes, validation_set_size, upsample=False
                 )
             )
@@ -303,17 +306,17 @@ def get_experiment_data(
     if balanced_test_set:
         print("Using a balanced test set")
         print("Distribution of original test set classes:")
-        classes = get_target_bins(test_dataset)
+        classes = get_target_bins(test_dataset)  # type: ignore[arg-type]
         print(classes)
 
         test_dataset = data.Subset(
-            test_dataset, balance_dataset_by_repeating(test_dataset, num_classes, len(test_dataset))
+            test_dataset, balance_dataset_by_repeating(test_dataset, num_classes, len(test_dataset))  # type: ignore[arg-type]
         )
 
     if reduced_dataset:
         # Let's assume we won't use more than 1000 elements for our validation set.
         active_learning_data.extract_dataset(len(train_dataset) - max(len(train_dataset) // 20, 5000))
-        test_dataset = src.subrange_dataset.SubrangeDataset(test_dataset, 0, max(len(test_dataset) // 10, 5000))
+        test_dataset = src.subrange_dataset.SubrangeDataset(test_dataset, 0, max(len(test_dataset) // 10, 5000))  # type: ignore[arg-type]
         if validation_dataset:
             validation_dataset = src.subrange_dataset.SubrangeDataset(
                 validation_dataset, 0, len(validation_dataset) // 10
@@ -327,11 +330,11 @@ def get_experiment_data(
         print(classes)
 
         print("Distribution of validation set classes:")
-        classes = get_target_bins(validation_dataset)
+        classes = get_target_bins(validation_dataset)  # type: ignore[arg-type]
         print(classes)
 
         print("Distribution of test set classes:")
-        classes = get_target_bins(test_dataset)
+        classes = get_target_bins(test_dataset)  # type: ignore[arg-type]
         print(classes)
 
         print("Distribution of pool classes:")
@@ -345,13 +348,13 @@ def get_experiment_data(
     print(f"Dataset info:")
     print(f"\t{len(active_learning_data.active_dataset)} active samples")
     print(f"\t{len(active_learning_data.available_dataset)} available samples")
-    print(f"\t{len(validation_dataset)} validation samples")
-    print(f"\t{len(test_dataset)} test samples")
+    print(f"\t{len(validation_dataset)} validation samples")  # type: ignore[arg-type]
+    print(f"\t{len(test_dataset)} test samples")  # type: ignore[arg-type]
 
     if data_source.shared_transform is not None or data_source.train_transform is not None:
         train_dataset = TransformedDataset(
             active_learning_data.active_dataset,
-            vision_transformer=compose_transformers([data_source.train_transform, data_source.shared_transform]),
+            vision_transformer=compose_transformers([data_source.train_transform, data_source.shared_transform]),  # type: ignore[arg-type]
         )
     else:
         train_dataset = active_learning_data.active_dataset
@@ -359,27 +362,27 @@ def get_experiment_data(
     if data_source.shared_transform is not None or data_source.scoring_transform is not None:
         available_dataset = TransformedDataset(
             active_learning_data.available_dataset,
-            vision_transformer=compose_transformers([data_source.scoring_transform, data_source.shared_transform]),
+            vision_transformer=compose_transformers([data_source.scoring_transform, data_source.shared_transform]),  # type: ignore[arg-type]
         )
     else:
-        available_dataset = active_learning_data.available_dataset
+        available_dataset = active_learning_data.available_dataset  # type: ignore[assignment]
 
     if data_source.shared_transform is not None:
-        test_dataset = TransformedDataset(test_dataset, vision_transformer=data_source.shared_transform)
+        test_dataset = TransformedDataset(test_dataset, vision_transformer=data_source.shared_transform)  # type: ignore[arg-type]
         validation_dataset = TransformedDataset(validation_dataset, vision_transformer=data_source.shared_transform)
 
     return ExperimentData(
         active_learning_data=active_learning_data,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset,  # type: ignore[arg-type]
         available_dataset=available_dataset,
-        validation_dataset=validation_dataset,
-        test_dataset=test_dataset,
+        validation_dataset=validation_dataset,  # type: ignore[arg-type]
+        test_dataset=test_dataset,  # type: ignore[arg-type]
         initial_samples=initial_samples,
     )
 
 
-def compose_transformers(iterable):
-    iterable = list(filter(None, iterable))
+def compose_transformers(iterable: Iterator) -> Optional[Compose]:
+    iterable = list(filter(None, iterable))  # type: ignore[var-annotated]
     if len(iterable) == 0:
         return None
     if len(iterable) == 1:
@@ -388,14 +391,16 @@ def compose_transformers(iterable):
 
 
 # TODO: move to utils?
-def get_target_bins(dataset):
+def get_target_bins(dataset: Dataset) -> Counter[int]:
     classes = collections.Counter(int(target) for target in get_targets(dataset))
     return classes
 
 
 # TODO: move to utils?
-def balance_dataset_by_repeating(dataset, num_classes, target_size, upsample=True):
-    balanced_samples_indices = get_balanced_sample_indices(get_targets(dataset), num_classes, len(dataset)).values()
+def balance_dataset_by_repeating(
+    dataset: Dataset, num_classes: int, target_size: int, upsample: bool = True
+) -> List[Any]:
+    balanced_samples_indices = get_balanced_sample_indices(get_targets(dataset), num_classes, len(dataset)).values()  # type: ignore[arg-type]
 
     if upsample:
         num_samples_per_class = max(
@@ -406,13 +411,13 @@ def balance_dataset_by_repeating(dataset, num_classes, target_size, upsample=Tru
             max(len(samples_per_class) for samples_per_class in balanced_samples_indices), target_size // num_classes
         )
 
-    def sample_indices(indices, total_length):
+    def sample_indices(indices: Tensor, total_length: int) -> List[int]:
         return (torch.randperm(total_length) % len(indices)).tolist()
 
-    balanced_samples_indices = list(
+    balanced_samples_indices = list(  # type: ignore[assignment]
         itertools.chain.from_iterable(
             [
-                [samples_per_class[i] for i in sample_indices(samples_per_class, num_samples_per_class)]
+                [samples_per_class[i] for i in sample_indices(samples_per_class, num_samples_per_class)]  # type: ignore[arg-type]
                 for samples_per_class in balanced_samples_indices
             ]
         )
@@ -420,17 +425,17 @@ def balance_dataset_by_repeating(dataset, num_classes, target_size, upsample=Tru
 
     print(f"Resampled dataset ({len(dataset)} samples) to a balanced set of {len(balanced_samples_indices)} samples!")
 
-    return balanced_samples_indices
+    return balanced_samples_indices  # type: ignore[return-value]
 
 
 # TODO: move to utils?
-def get_targets(dataset):
+def get_targets(dataset: Dataset) -> Tensor:
     """Get the targets of a dataset without any target target transforms(!)."""
     if isinstance(dataset, TransformedDataset):
         return get_targets(dataset.dataset)
     if isinstance(dataset, data.Subset):
         targets = get_targets(dataset.dataset)
-        return torch.as_tensor(targets)[dataset.indices]
+        return torch.as_tensor(targets)[dataset.indices]  # type: ignore[index]
     if isinstance(dataset, data.ConcatDataset):
         return torch.cat([get_targets(sub_dataset) for sub_dataset in dataset.datasets])
 

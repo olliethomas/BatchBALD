@@ -6,7 +6,7 @@ import src.mc_dropout
 
 
 class BayesianNet(src.mc_dropout.BayesianModule):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes: int) -> None:
         super().__init__(num_classes)
 
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
@@ -18,7 +18,7 @@ class BayesianNet(src.mc_dropout.BayesianModule):
         self.fc2 = nn.Linear(128, num_classes)
 
     # Special forward pass used in BayesianModule
-    def mc_forward_impl(self, input: Tensor):
+    def mc_forward_impl(self, input: Tensor) -> Tensor:
         input = F.relu(F.max_pool2d(self.conv1_drop(self.conv1(input)), 2))
         input = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(input)), 2))
         input = input.view(-1, 1024)

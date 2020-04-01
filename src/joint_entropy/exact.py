@@ -1,10 +1,13 @@
+from typing import Optional
+
 import torch
-from torch_utils import split_tensors
+from src.torch_utils import split_tensors
 from torch import jit
+from torch import Tensor
 
 
 @jit.script
-def joint_probs_M_K_impl(probs_N_K_C, prev_joint_probs_M_K):
+def joint_probs_M_K_impl(probs_N_K_C: Tensor, prev_joint_probs_M_K: Tensor) -> Tensor:
     assert prev_joint_probs_M_K.shape[1] == probs_N_K_C.shape[1]
 
     N, K, C = probs_N_K_C.shape
@@ -20,7 +23,7 @@ def joint_probs_M_K_impl(probs_N_K_C, prev_joint_probs_M_K):
     return prev_joint_probs_M_K
 
 
-def joint_probs_M_K(probs_N_K_C, prev_joint_probs_M_K=None):
+def joint_probs_M_K(probs_N_K_C: Tensor, prev_joint_probs_M_K: Optional[Tensor] = None) -> Tensor:
     if prev_joint_probs_M_K is not None:
         assert prev_joint_probs_M_K.shape[1] == probs_N_K_C.shape[1]
 
@@ -31,7 +34,7 @@ def joint_probs_M_K(probs_N_K_C, prev_joint_probs_M_K=None):
 
 
 @jit.script
-def entropy_from_M_K(joint_probs_M_K):
+def entropy_from_M_K(joint_probs_M_K: Tensor) -> Tensor:
     probs_M = torch.mean(joint_probs_M_K, dim=1, keepdim=False)
     nats_M = -torch.log(probs_M) * probs_M
     entropy = torch.sum(nats_M)
@@ -39,12 +42,12 @@ def entropy_from_M_K(joint_probs_M_K):
 
 
 @jit.script
-def entropy_from_probs_b_M_C(probs_b_M_C):
+def entropy_from_probs_b_M_C(probs_b_M_C: Tensor) -> Tensor:
     return torch.sum(-probs_b_M_C * torch.log(probs_b_M_C), dim=(1, 2))
 
 
 @jit.script
-def entropy_joint_probs_B_M_C(probs_B_K_C, prev_joint_probs_M_K):
+def entropy_joint_probs_B_M_C(probs_B_K_C: Tensor, prev_joint_probs_M_K: Tensor) -> Tensor:
     B, K, C = probs_B_K_C.shape
     M = prev_joint_probs_M_K.shape[0]
     joint_probs_B_M_C = torch.empty((B, M, C), dtype=torch.float64, device=probs_B_K_C.device)
@@ -56,7 +59,7 @@ def entropy_joint_probs_B_M_C(probs_B_K_C, prev_joint_probs_M_K):
     return joint_probs_B_M_C
 
 
-def batch(probs_B_K_C, prev_joint_probs_M_K=None):
+def batch(probs_B_K_C: Tensor, prev_joint_probs_M_K: Optional[Tensor] = None) -> Tensor:
     if prev_joint_probs_M_K is not None:
         assert prev_joint_probs_M_K.shape[1] == probs_B_K_C.shape[1]
 
@@ -74,18 +77,18 @@ def batch(probs_B_K_C, prev_joint_probs_M_K=None):
 
     chunk_size = 256
     for entropy_b, joint_probs_b_M_C in split_tensors(entropy_B, joint_probs_B_M_C, chunk_size):
-        entropy_b.copy_(entropy_from_probs_b_M_C(joint_probs_b_M_C), non_blocking=True)
+        entropy_b.copy_(entropy_from_probs_b_M_C(joint_probs_b_M_C), non_blocking=True)  # type: ignore[attr-defined]
 
     return entropy_B
 
 
 @jit.script
-def conditional_entropy_from_logits_B_K_C(logits_B_K_C):
+def conditional_entropy_from_logits_B_K_C(logits_B_K_C: Tensor) -> Tensor:
     B, K, C = logits_B_K_C.shape
     return torch.sum(-logits_B_K_C * torch.exp(logits_B_K_C), dim=(1, 2)) / K
 
 
-def batch_conditional_entropy_B(logits_B_K_C, out_conditional_entropy_B=None):
+def batch_conditional_entropy_B(logits_B_K_C: Tensor, out_conditional_entropy_B: Optional[Tensor] = None) -> Tensor:
     B, K, C = logits_B_K_C.shape
 
     if out_conditional_entropy_B is None:
@@ -95,6 +98,6 @@ def batch_conditional_entropy_B(logits_B_K_C, out_conditional_entropy_B=None):
 
     for conditional_entropy_b, logits_b_K_C in split_tensors(out_conditional_entropy_B, logits_B_K_C, 8192):
         logits_b_K_C = logits_b_K_C.double()
-        conditional_entropy_b.copy_(conditional_entropy_from_logits_B_K_C(logits_b_K_C), non_blocking=True)
+        conditional_entropy_b.copy_(conditional_entropy_from_logits_B_K_C(logits_b_K_C), non_blocking=True)  # type: ignore[attr-defined]
 
     return out_conditional_entropy_B

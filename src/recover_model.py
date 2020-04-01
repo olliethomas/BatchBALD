@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import src.acquisition_functions
 
 # TODO(blackhc): extract AcquisitionMethod and DatasetEnum
@@ -13,7 +15,7 @@ from .random_fixed_length_sampler import RandomFixedLengthSampler
 from .train_model import train_model
 from .active_learning_data import ActiveLearningData
 from collections import namedtuple
-from typing import NamedTuple
+from typing import NamedTuple, Any, Dict, Optional, List, Type, Tuple, Callable
 
 
 class Loaders(NamedTuple):
@@ -23,7 +25,7 @@ class Loaders(NamedTuple):
 
 
 class RecoveredModel(NamedTuple):
-    args: tuple
+    args: Namespace
     model: nn.Module
     num_epochs: int
     test_metrics: dict
@@ -33,7 +35,7 @@ class RecoveredModel(NamedTuple):
     loaders: Loaders
 
 
-def get_samples_from_laaos_store(laaos_store, target_iteration=None):
+def get_samples_from_laaos_store(laaos_store: Dict[str, Any], target_iteration: Optional[int] = None) -> List[int]:
     samples = []
     samples.extend(laaos_store["initial_samples"])
 
@@ -44,13 +46,13 @@ def get_samples_from_laaos_store(laaos_store, target_iteration=None):
 
 
 # Because Python sucks.
-def parse_enum_str(enum_str: str, enum_cls):
+def parse_enum_str(enum_str: str, enum_cls: Any) -> src.acquisition_functions.AcquisitionFunction:
     value = enum_str.split(".", 1)[1]
     return enum_cls[value]
 
 
 # TODO: deduplicate with al_notebook.results_loader
-def recover_args(laaos_store) -> namedtuple:
+def recover_args(laaos_store: Dict[str, Any]) -> Namespace:
     args = dict(laaos_store["args"])
     # Recover enums
     args["type"] = parse_enum_str(args["type"], src.acquisition_functions.AcquisitionFunction)
@@ -67,10 +69,10 @@ def recover_args(laaos_store) -> namedtuple:
     else:
         args["dataset"] = src.dataset_enum.DatasetEnum.mnist
 
-    return namedtuple("args", args.keys())(*args.values())
+    return namedtuple("args", args.keys())(*args.values())  # type: ignore[return-value]
 
 
-def recover_model(laaos_store, target_iteration=None):
+def recover_model(laaos_store: Dict[str, Any], target_iteration: Optional[int] = None) -> RecoveredModel:
     args = recover_args(laaos_store)
     sample_indices = get_samples_from_laaos_store(laaos_store, target_iteration)
 
@@ -116,7 +118,7 @@ def recover_model(laaos_store, target_iteration=None):
     early_stopping_patience = args.early_stopping_patience
     max_epochs = args.epochs
 
-    def desc(name):
+    def desc(name: str) -> Callable[[Any], str]:
         return lambda engine: "%s" % name
 
     model, num_epochs, test_metrics = dataset.train_model(

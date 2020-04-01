@@ -23,7 +23,7 @@ import pytest
 import pytest_benchmark
 import torch
 
-import torch_utils
+import src.torch_utils
 
 # @pytest.fixture(params=[False, True], ids=["CPU", "CUDA"])
 @pytest.fixture(params=[False], ids=["CPU"])
@@ -31,7 +31,7 @@ def torch_device(request):
     use_cuda = request.param
     if use_cuda:
         assert torch.cuda.is_available()
-        torch_utils.gc_cuda()
+        src.torch_utils.gc_cuda()
         return torch.device("cuda")
     return torch.device("cpu")
 
@@ -77,8 +77,8 @@ def test_batch_matmul(B, K, M, benchmark, samples_M_K, probs_B_K_C, result_B_M_C
     def inner():
         torch.matmul(samples_M_K, probs_B_K_C, out=result_B_M_C)
 
-        torch.cuda.synchronize()
-        return result_B_M_C.shape
+        torch.cuda.synchronize()  # type: ignore[call-arg]
+        return result_B_M_C.shape  # type: ignore[call-arg]
 
     benchmark(inner)
 
@@ -90,7 +90,7 @@ def test_looped_matmul(B, K, M, benchmark, samples_M_K, probs_B_K_C, result_B_M_
         for b in range(B):
             torch.matmul(samples_M_K, probs_B_K_C[b], out=result_B_M_C[b])
 
-        torch.cuda.synchronize()
+        torch.cuda.synchronize()  # type: ignore[call-arg]
         return result_B_M_C.shape
 
     benchmark(inner)
