@@ -84,7 +84,7 @@ def test_check_input_permutation(af_type: src.acquisition_functions.AcquisitionF
     forwarder = Forwarder()
     estimator = af_type
 
-    torch.testing.assert_allclose(  # type: ignore[arg-type]
+    torch.testing.assert_allclose(  # type: ignore[arg-type,attr-defined]
         torch.cat([mixture_a, mixture_b], dim=0), torch.cat([mixture_c[::2], mixture_c[1::2]], dim=0),
     )
 

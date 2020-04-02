@@ -83,8 +83,8 @@ def get_Adult() -> DataSource:
     train_x = pandas.concat([train.x, train.s], axis="columns")
     test_x = pandas.concat([test.x, test.s], axis="columns")
 
-    train_dataset = torch.utils.data.TensorDataset(torch.Tensor(train_x.values), torch.Tensor(train.y.values))
-    test_dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x.values), torch.Tensor(test.y.values))
+    train_dataset = torch.utils.data.TensorDataset(torch.Tensor(train_x.values), torch.Tensor(train.y.values))  # type: ignore[call-arg]
+    test_dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x.values), torch.Tensor(test.y.values))  # type: ignore[call-arg]
 
     return DataSource(train_dataset=train_dataset, test_dataset=test_dataset)
 

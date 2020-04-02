@@ -3,7 +3,7 @@ import functools
 import itertools
 import os
 import sys
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
@@ -127,8 +127,7 @@ def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argpa
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="BatchBALD",
-        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)
-        # type: ignore[arg-type]
+        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120),  # type: ignore[arg-type]
     )
     parser.add_argument("--experiment_task_id", type=str, default=None, help="experiment id")
     parser.add_argument(
@@ -175,7 +174,7 @@ def get_store(args: argparse.Namespace) -> StoreRoot:
     return store
 
 
-def torch_setup(args: argparse.Namespace):
+def torch_setup(args: argparse.Namespace) -> Tuple[torch.device, Dict[str, Any]]:
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
