@@ -1,9 +1,10 @@
-from torch import nn as nn, Tensor
+from torch import Tensor
+from torch import nn as nn
 from torch.nn import functional as F
 
-# from torchvision import models
-
 import src.mc_dropout
+
+# from torchvision import models
 
 
 class BayesianNet(src.mc_dropout.BayesianModule):

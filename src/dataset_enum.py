@@ -1,27 +1,30 @@
-from dataclasses import dataclass
 import collections
 import enum
 import itertools
+from dataclasses import dataclass
+from typing import Any, Callable, Counter, Dict, Iterator, List, Optional, Tuple
 
-from torch import optim
-from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets, transforms
-import torch.utils.data as data
+import pandas
+import sklearn
 import torch
-from torch import Tensor
-
-from typing import List, Any, Optional, Tuple, Dict, Iterable, Iterator, Counter, Callable
-
+import torch.utils.data as data
+from ethicml.data import Adult, load_data
+from ethicml.preprocessing import train_test_split
+from torch import Tensor, optim
+from torch.utils.data import DataLoader, Dataset, TensorDataset
+from torchvision import datasets, transforms
 from torchvision.transforms import Compose
 
-import src.mnist_model
-import src.emnist_model
-import src.vgg_model
+import src.models.adult_model
+import src.models.emnist_model
+import src.models.mnist_model
+import src.models.vgg_model
+import src.subrange_dataset
+
 from .active_learning_data import ActiveLearningData
 from .torch_utils import get_balanced_sample_indices
 from .train_model import train_model
 from .transformed_dataset import TransformedDataset
-import src.subrange_dataset
 
 
 @dataclass
@@ -68,6 +71,24 @@ def get_CINIC10(root: str = "./") -> DataSource:
     )
 
 
+def get_Adult() -> DataSource:
+    data = load_data(Adult())
+    x = data.x[Adult().continuous_features].values
+    normalizer = sklearn.preprocessing.Normalizer()
+    x_scaled = normalizer.fit_transform(x)
+    data.x[Adult().continuous_features] = x_scaled
+
+    train, test = train_test_split(data)
+
+    train_x = pandas.concat([train.x, train.s], axis="columns")
+    test_x = pandas.concat([test.x, test.s], axis="columns")
+
+    train_dataset = torch.utils.data.TensorDataset(torch.Tensor(train_x.values), torch.Tensor(train.y.values))
+    test_dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x.values), torch.Tensor(test.y.values))
+
+    return DataSource(train_dataset=train_dataset, test_dataset=test_dataset)
+
+
 def get_MNIST() -> DataSource:
     # num_classes=10, input_size=28
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
@@ -96,6 +117,7 @@ class DatasetEnum(enum.Enum):
     repeated_mnist_w_noise5 = "repeated_mnist_w_noise5"
     mnist_w_noise = "mnist_w_noise"
     cinic10 = "cinic10"
+    adult = "adult"
 
     def get_data_source(self) -> DataSource:
         if self == DatasetEnum.mnist:
@@ -163,6 +185,8 @@ class DatasetEnum(enum.Enum):
             )
         elif self == DatasetEnum.cinic10:
             return get_CINIC10()
+        elif self == DatasetEnum.adult:
+            return get_Adult()
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -180,6 +204,8 @@ class DatasetEnum(enum.Enum):
             return 47
         elif self == DatasetEnum.cinic10:
             return 10
+        elif self == DatasetEnum.adult:
+            return 2
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -192,11 +218,13 @@ class DatasetEnum(enum.Enum):
             DatasetEnum.repeated_mnist_w_noise5,
             DatasetEnum.mnist_w_noise,
         ):
-            return src.mnist_model.BayesianNet(num_classes=num_classes).to(device)
+            return src.models.mnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
-            return src.emnist_model.BayesianNet(num_classes=num_classes).to(device)
+            return src.models.emnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self == DatasetEnum.cinic10:
-            return src.vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+            return src.models.vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+        elif self == DatasetEnum.adult:
+            return src.models.adult_model.BayesianNet(num_classes=num_classes, input_dim=102).to(device)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -438,6 +466,8 @@ def get_targets(dataset: Dataset) -> Tensor:
         return torch.as_tensor(targets)[dataset.indices]  # type: ignore[index]
     if isinstance(dataset, data.ConcatDataset):
         return torch.cat([get_targets(sub_dataset) for sub_dataset in dataset.datasets])
+    if isinstance(dataset, TensorDataset):
+        return dataset.tensors[1]
 
     if isinstance(dataset, (datasets.MNIST, datasets.ImageFolder,)):
         return torch.as_tensor(dataset.targets)

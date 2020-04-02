@@ -3,17 +3,19 @@ import functools
 import itertools
 import os
 import sys
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 
 # NOTE(blackhc): get the directory right (oh well)
 import blackhc.notebook
 import torch
 from blackhc import laaos
+from blackhc.laaos import StoreRoot
+from torch.utils.data import DataLoader
 
 from src.acquisition_functions import AcquisitionFunction
 from src.acquisition_method import AcquisitionMethod
 from src.context_stopwatch import ContextStopwatch
-from src.dataset_enum import DatasetEnum, get_experiment_data, get_targets
+from src.dataset_enum import DatasetEnum, ExperimentData, get_experiment_data, get_targets
 from src.random_fixed_length_sampler import RandomFixedLengthSampler
 from src.torch_utils import get_base_indices
 
@@ -122,9 +124,11 @@ def create_experiment_config_argparser(parser: argparse.ArgumentParser) -> argpa
     return parser
 
 
-def main() -> None:
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="BatchBALD", formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)  # type: ignore[arg-type]
+        description="BatchBALD",
+        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)
+        # type: ignore[arg-type]
     )
     parser.add_argument("--experiment_task_id", type=str, default=None, help="experiment id")
     parser.add_argument(
@@ -144,7 +148,11 @@ def main() -> None:
         # Args take priority.
         args = parser.parse_args(namespace=argparse.Namespace(**config[args.experiment_task_id]))
 
-    # DONT TRUNCATE LOG FILES EVER AGAIN!!! (OFC THIS HAD TO HAPPEN AND BE PAINFUL)
+    return args
+
+
+def get_store(args: argparse.Namespace) -> StoreRoot:
+
     reduced_dataset = args.quickquick
     if args.experiment_task_id:
         store_name = args.experiment_task_id
@@ -164,11 +172,10 @@ def main() -> None:
     store["args"] = args.__dict__
     store["cmdline"] = sys.argv[:]
 
-    print("|".join(sys.argv))
-    print(args.__dict__)
+    return store
 
-    acquisition_method: AcquisitionMethod = args.acquisition_method
 
+def torch_setup(args: argparse.Namespace):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
@@ -179,23 +186,12 @@ def main() -> None:
 
     kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
 
-    dataset: DatasetEnum = args.dataset
-    samples_per_class = args.initial_samples_per_class
-    validation_set_size = args.validation_set_size
-    balanced_test_set = args.balanced_test_set
-    balanced_validation_set = args.balanced_validation_set
+    return device, kwargs
 
-    experiment_data = get_experiment_data(
-        data_source=dataset.get_data_source(),
-        num_classes=dataset.num_classes,
-        initial_samples=args.initial_samples,
-        reduced_dataset=reduced_dataset,
-        samples_per_class=samples_per_class,
-        validation_set_size=validation_set_size,
-        balanced_test_set=balanced_test_set,
-        balanced_validation_set=balanced_validation_set,
-    )
 
+def get_loaders(
+    experiment_data: ExperimentData, args: argparse.Namespace, kwargs: Any
+) -> Tuple[DataLoader, DataLoader, DataLoader, DataLoader]:
     # Test dataset
     test_loader = torch.utils.data.DataLoader(
         experiment_data.test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
@@ -218,6 +214,34 @@ def main() -> None:
     validation_loader = torch.utils.data.DataLoader(
         experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
     )
+
+    return test_loader, train_loader, available_loader, validation_loader
+
+
+def main() -> None:
+
+    args = get_args()
+    store = get_store(args)
+
+    print("|".join(sys.argv))
+    print(args.__dict__)
+
+    acquisition_method: AcquisitionMethod = args.acquisition_method
+    device, kwargs = torch_setup(args)
+
+    dataset: DatasetEnum = args.dataset
+    experiment_data = get_experiment_data(
+        data_source=dataset.get_data_source(),
+        num_classes=dataset.num_classes,
+        initial_samples=args.initial_samples,
+        reduced_dataset=args.quickquick,
+        samples_per_class=args.initial_samples_per_class,
+        validation_set_size=args.validation_set_size,
+        balanced_test_set=args.balanced_test_set,
+        balanced_validation_set=args.balanced_validation_set,
+    )
+
+    test_loader, train_loader, available_loader, validation_loader = get_loaders(experiment_data, args, kwargs)
 
     store["iterations"] = []
     # store wraps the empty list in a storable list, so we need to fetch it separately.

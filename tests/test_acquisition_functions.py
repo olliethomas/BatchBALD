@@ -6,7 +6,7 @@ import torch.utils.data
 from torchvision import datasets, transforms
 
 import src.acquisition_functions
-import src.mnist_model
+import src.models.mnist_model
 import src.sampler_model
 
 # NOTE: we could replace this with a custom dataset if it becomes a problem on Jekyll.
@@ -51,7 +51,7 @@ def test_acquisition_functions(acquisition_function: src.acquisition_functions.A
         shuffle=False,
     )
 
-    bayesian_net = src.mnist_model.BayesianNet(10)
+    bayesian_net = src.models.mnist_model.BayesianNet(10)
 
     estimator = acquisition_function
 

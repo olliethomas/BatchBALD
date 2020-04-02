@@ -1,6 +1,6 @@
+from torch import Tensor
 from torch import nn as nn
 from torch.nn import functional as F
-from torch import Tensor
 
 import src.mc_dropout
 

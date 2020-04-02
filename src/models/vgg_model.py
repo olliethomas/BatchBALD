@@ -1,9 +1,9 @@
+from typing import Any, List
+
 import torch.nn as nn
 from torch import Tensor
 from torch.hub import load_state_dict_from_url
-
 from torch.nn import functional as F
-from typing import List, Any, Dict
 
 import src.mc_dropout
 

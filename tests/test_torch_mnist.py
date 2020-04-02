@@ -1,14 +1,11 @@
-import pytest
+import itertools
 
-import numpy as np
 import torch
-import src.torch_utils
-import src.mnist_model
 import torch.utils.data
-
 from torchvision import datasets, transforms
 
-import itertools
+import src.models.mnist_model
+import src.torch_utils
 
 
 def test_find_additional_labels():
@@ -24,8 +21,8 @@ def test_find_additional_labels():
         shuffle=False,
     )
 
-    net = src.mnist_model.BayesianNet(10)
-    estimator = src.mnist_model.BALDEstimator(net, n=10)
+    net = src.models.mnist_model.BayesianNet(10)
+    estimator = src.models.mnist_model.BALDEstimator(net, n=10)
     estimator.eval()
 
     scores = torch.tensor([])

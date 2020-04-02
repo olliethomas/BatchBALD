@@ -14,3 +14,4 @@ mypy
 data-science-types
 prettyprinter
 pre-commit
+EthicML
